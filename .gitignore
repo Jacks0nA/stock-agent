@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 backtest_results.json
 memory.json
+schedule_state.json
+logs/
