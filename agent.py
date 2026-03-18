@@ -26,138 +26,103 @@ LOW_ACCURACY_ASSETS = {
 }
 
 def get_accuracy_context(tickers):
-    context = "\nHistorical signal accuracy for assets in this session:\n"
-    high = [t for t in tickers if t in HIGH_ACCURACY_ASSETS]
-    low = [t for t in tickers if t in LOW_ACCURACY_ASSETS]
+    high = [f"{t}: {HIGH_ACCURACY_ASSETS[t]}%" for t in tickers if t in HIGH_ACCURACY_ASSETS]
+    low = [f"{t}: {LOW_ACCURACY_ASSETS[t]}%" for t in tickers if t in LOW_ACCURACY_ASSETS]
+    context = ""
     if high:
-        context += "HIGH CONFIDENCE (trust these signals more):\n"
-        for t in high:
-            context += f"  {t}: {HIGH_ACCURACY_ASSETS[t]}% historical accuracy\n"
+        context += f"HIGH CONFIDENCE: {', '.join(high)}\n"
     if low:
-        context += "LOW CONFIDENCE (treat with extra caution):\n"
-        for t in low:
-            context += f"  {t}: {LOW_ACCURACY_ASSETS[t]}% historical accuracy\n"
-    return context
+        context += f"LOW CONFIDENCE: {', '.join(low)}\n"
+    return context if context else "No historical accuracy data for these assets.\n"
+
+def build_news_string(news, max_per_stock=2):
+    news_string = ""
+    for ticker, data in news.items():
+        if not data.get("has_signal") and data.get("avg_score", 0) == 0:
+            news_string += f"{ticker}: No significant news\n"
+            continue
+        news_string += f"{ticker} ({data['overall_sentiment']} {data['avg_score']}):\n"
+        significant = [h for h in data["headlines"] if abs(h["score"]) > 0.1]
+        if not significant:
+            significant = data["headlines"][:1]
+        for h in significant[:max_per_stock]:
+            news_string += f"  {h['sentiment']} ({h['score']}): {h['title'][:100]}\n"
+    return news_string
+
+def build_options_string(options_summary):
+    if not options_summary:
+        return "No significant options activity.\n"
+    result = ""
+    for ticker, data in options_summary.items():
+        result += f"{ticker} {data['overall']}: calls ${data['call_value']:,.0f} puts ${data['put_value']:,.0f}\n"
+        for flow in data["flow"][:2]:
+            result += f"  {flow['signal']} {flow['type']} ${flow['strike']} exp {flow['expiry']} vol {flow['volume']:,}\n"
+    return result
 
 def analyse_stocks(df, news, historical, earnings, market_context, insider_summary=None, options_summary=None):
     data_string = df.to_string(index=False)
     tickers = df["ticker"].tolist()
 
-    news_string = ""
-    for ticker, data in news.items():
-        news_string += f"\n{ticker} — Overall sentiment: {data['overall_sentiment']} (score: {data['avg_score']})\n"
-        for h in data["headlines"]:
-            news_string += f"  {h['sentiment']} ({h['score']}) — {h['title']}\n"
-
     historical_string = ""
     for ticker, data in historical.items():
         if data:
-            historical_string += f"\n{ticker}:\n"
-            historical_string += f"  30d High: {data.get('high_30d', 'N/A')}  Low: {data.get('low_30d', 'N/A')}  Avg: {data.get('avg_30d', 'N/A')}\n"
-            historical_string += f"  Overall trend: {data.get('trend', 'N/A')}\n"
-            historical_string += f"  MA20: {data.get('ma20', 'N/A')}  MA50: {data.get('ma50', 'N/A')}\n"
-            historical_string += f"  MA Signal: {data.get('ma_signal', 'N/A')}\n"
-            historical_string += f"  RSI: {data.get('rsi', 'N/A')} — {data.get('rsi_signal', 'N/A')}\n"
-            historical_string += f"  Volume: {data.get('volume_signal', 'N/A')}\n"
+            historical_string += f"{ticker}: RSI {data.get('rsi','N/A')} ({data.get('rsi_signal','N/A')}) | {data.get('ma_signal','N/A')} | {data.get('trend','N/A')} | Vol {data.get('volume_signal','N/A')}\n"
 
-    insider_string = "No significant insider buying detected."
+    insider_string = "None detected.\n"
     if insider_summary:
-        insider_string = "INSIDER BUYING ACTIVITY:\n"
+        insider_string = ""
         for ticker, data in insider_summary.items():
-            insider_string += f"\n{ticker} — {data['signal']}\n"
-            insider_string += f"  Total: ${data['total_value']:,.0f} across {data['num_trades']} trades\n"
-            for trade in data["trades"][:2]:
-                insider_string += f"  {trade['date']} — {trade['insider']} ({trade['title']}) bought {trade['shares']:,.0f} shares @ ${trade['price']:.2f}\n"
-
-    options_string = "No unusual options activity detected."
-    if options_summary:
-        options_string = "UNUSUAL OPTIONS FLOW:\n"
-        for ticker, data in options_summary.items():
-            options_string += f"\n{ticker} — {data['overall']}\n"
-            options_string += f"  Call value: ${data['call_value']:,.0f}  Put value: ${data['put_value']:,.0f}\n"
-            for flow in data["flow"][:2]:
-                options_string += f"  {flow['signal']} {flow['type']} — Strike ${flow['strike']} exp {flow['expiry']} — Vol {flow['volume']:,} — ${flow['total_value']:,.0f}\n"
+            insider_string += f"{ticker}: {data['signal']} — ${data['total_value']:,.0f} total\n"
 
     memory_summary = get_memory_summary()
     earnings_summary = get_earnings_summary(earnings)
     market_summary = get_market_summary(market_context)
     accuracy_context = get_accuracy_context(tickers)
+    news_string = build_news_string(news)
+    options_string = build_options_string(options_summary)
 
     for attempt in range(3):
         try:
             message = client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=4096,
+                max_tokens=2500,
                 messages=[
                     {
                         "role": "user",
-                        "content": f"""You are a professional stock market analyst with memory of previous sessions and access to institutional flow data.
+                        "content": f"""Professional stock analyst. Be concise and direct.
 
-Previous session memory:
-{memory_summary}
+MARKET: {market_summary}
 
-Market and sector context:
-{market_summary}
+ACCURACY: {accuracy_context}
 
-Historical signal accuracy:
-{accuracy_context}
+MEMORY: {memory_summary}
 
-Live price data:
+PRICES & TECHNICALS:
 {data_string}
-
-Technical indicators and 30 day history:
 {historical_string}
 
-Latest news with sentiment scores:
-{news_string}
+NEWS: {news_string}
 
-Insider buying activity (SEC Form 4 — genuine cash purchases only):
-{insider_string}
+OPTIONS: {options_string}
 
-Unusual options flow (institutional money):
-{options_string}
+INSIDER: {insider_string}
 
-Upcoming earnings:
-{earnings_summary}
+EARNINGS: {earnings_summary}
 
-Please analyse and provide:
-1. Market context — broad move or stock specific?
-2. Sector correlation — are moves explained by sector ETFs?
-3. RSI analysis — flag overbought or oversold stocks
-4. Moving average signals — above or below MA20 and MA50?
-5. Volume analysis — are moves backed by volume?
-6. Options flow — what is institutional money betting on?
-7. Insider activity — any meaningful cash purchases?
-8. Sentiment analysis — positive or negative news?
-9. Earnings warnings — any stocks reporting in 7 days?
-10. Comparison to previous sessions — what has changed?
+Provide:
+1. Market context (2 lines max)
+2. Key RSI/MA signals (flagged only)
+3. Options flow vs price divergences
+4. Session comparison (what changed)
 
-Then give me:
-🟢 BUY signals — strength not explained by broad market
-🔴 AVOID signals — weakness or bearish technicals
-⚪ WATCH signals — needs confirmation
+Then:
+🟢 BUY: ticker, why, LONG/SHORT, hold time, entry, target, stop, R:R, confidence
+🔴 AVOID: ticker, why, what changes your mind
+⚪ WATCH: ticker, specific trigger
 
-For every BUY signal:
-- Why: biggest reason to buy
-- Position type: LONG or SHORT
-- Hold time: Scalp / Swing / Position / Investor
-- Entry: ideal price
-- Target: realistic price target
-- Stop loss: where to cut
-- Risk/reward ratio
-- Options flow confirms or contradicts?
-- Insider buying present?
-- Confidence: Low / Medium / High
+One line per stock: direction | confidence | reason
 
-For every AVOID signal:
-- Why and what would change your mind
-
-For every WATCH signal:
-- Specific trigger before entering
-
-One line prediction per stock: direction, confidence, biggest reason.
-
-IMPORTANT: Weight confidence by historical accuracy. Flag when options flow contradicts technical signals — that divergence is the most important thing to highlight. Be direct. Make a call."""
+Weight confidence by historical accuracy. Flag options/technical divergences prominently."""
                     }
                 ]
             )

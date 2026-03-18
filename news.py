@@ -24,10 +24,7 @@ def fetch_newsapi_headlines(ticker, client):
             sort_by="publishedAt",
             page_size=3
         )
-        headlines = []
-        for article in articles["articles"]:
-            headlines.append(article["title"])
-        return headlines
+        return [a["title"] for a in articles["articles"]]
     except Exception:
         return []
 
@@ -58,7 +55,6 @@ def fetch_stock_news(tickers):
     for ticker in tickers:
         try:
             headlines = []
-
             yahoo_headlines = fetch_yahoo_headlines(ticker)
             headlines.extend(yahoo_headlines)
 
@@ -73,6 +69,7 @@ def fetch_stock_news(tickers):
 
             scored_headlines = []
             scores = []
+
             for title in headlines:
                 sentiment_label, sentiment_score = get_sentiment(title)
                 scored_headlines.append({
@@ -94,21 +91,16 @@ def fetch_stock_news(tickers):
             all_news[ticker] = {
                 "headlines": scored_headlines,
                 "overall_sentiment": overall_sentiment,
-                "avg_score": avg_score
+                "avg_score": avg_score,
+                "has_signal": abs(avg_score) > 0.1
             }
 
-        except Exception as e:
+        except Exception:
             all_news[ticker] = {
                 "headlines": [{"title": "No news found", "sentiment": "Neutral", "score": 0}],
                 "overall_sentiment": "Neutral",
-                "avg_score": 0
+                "avg_score": 0,
+                "has_signal": False
             }
 
     return all_news
-
-if __name__ == "__main__":
-    news = fetch_stock_news(["AAPL", "NVDA", "TSLA"])
-    for ticker, data in news.items():
-        print(f"\n{ticker} — Overall sentiment: {data['overall_sentiment']} ({data['avg_score']})")
-        for h in data["headlines"]:
-            print(f"  {h['sentiment']} ({h['score']}) — {h['title']}")

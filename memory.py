@@ -34,7 +34,6 @@ def save_analysis(tickers, analysis, historical):
 def load_memory():
     if not os.path.exists(MEMORY_FILE):
         return []
-    
     with open(MEMORY_FILE, "r") as f:
         return json.load(f)
 
@@ -44,13 +43,20 @@ def get_memory_summary():
     if not memory:
         return "No previous sessions recorded yet."
     
-    summary = f"I have {len(memory)} previous analysis sessions on record.\n\n"
+    last_5 = memory[-5:]
     
-    last_3 = memory[-3:]
-    for entry in last_3:
-        summary += f"Session at {entry['timestamp']}:\n"
+    summary = f"Last {len(last_5)} sessions:\n"
+    
+    for entry in last_5:
+        summary += f"\n{entry['timestamp']}:\n"
         for ticker, indicators in entry.get("indicators", {}).items():
-            summary += f"  {ticker}: RSI {indicators.get('rsi')} ({indicators.get('rsi_signal')}), {indicators.get('trend')}\n"
-        summary += "\n"
+            rsi = indicators.get('rsi')
+            trend = indicators.get('trend')
+            if rsi and trend:
+                summary += f"  {ticker}: RSI {rsi} ({indicators.get('rsi_signal')}), {trend}\n"
+    
+    lines = summary.split("\n")
+    if len(lines) > 60:
+        summary = "\n".join(lines[:60]) + "\n[Earlier sessions truncated]"
     
     return summary
