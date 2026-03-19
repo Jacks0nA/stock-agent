@@ -12,8 +12,11 @@ from options import get_options_summary
 from logger import save_daily_log, get_all_dates, get_log_for_date_window, read_log_file, delete_date_logs
 import json
 import os
+from supabase import create_client
+from dotenv import load_dotenv
 
-SCHEDULE_FILE = "schedule_state.json"
+load_dotenv()
+
 GMT = timezone.utc
 
 DAILY_WINDOWS = [
@@ -22,15 +25,33 @@ DAILY_WINDOWS = [
     {"name": "US Pre-Close", "hour": 20, "minute": 30},
 ]
 
+def get_supabase():
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_KEY")
+    return create_client(url, key)
+
 def load_schedule_state():
-    if not os.path.exists(SCHEDULE_FILE):
+    try:
+        client = get_supabase()
+        result = client.table("schedule_state").select("*").execute()
+        state = {"last_run_windows": {}}
+        for row in result.data:
+            if row["key"].startswith("window_"):
+                state["last_run_windows"][row["key"][7:]] = row["value"]
+        return state
+    except Exception:
         return {"last_run_windows": {}}
-    with open(SCHEDULE_FILE, "r") as f:
-        return json.load(f)
 
 def save_schedule_state(state):
-    with open(SCHEDULE_FILE, "w") as f:
-        json.dump(state, f, indent=2)
+    try:
+        client = get_supabase()
+        for key, value in state.get("last_run_windows", {}).items():
+            client.table("schedule_state").upsert({
+                "key": f"window_{key}",
+                "value": value
+            }).execute()
+    except Exception as e:
+        print(f"Schedule state save error: {e}")
 
 def get_window_key(window, date=None):
     if date is None:
@@ -88,7 +109,7 @@ def mark_window_complete(window):
     save_schedule_state(state)
 
 def run_full_analysis(mode="Manual"):
-    with st.spinner("Stage 1 — Screening 125+ assets..."):
+    with st.spinner("Stage 1 — Screening assets..."):
         shortlist = run_screen()
 
     tickers = [r["ticker"] for r in shortlist]
