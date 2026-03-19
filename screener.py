@@ -6,8 +6,10 @@ from datetime import datetime
 # Assets excluded based on 2-year backtest with min 5 signals
 # Only excluding assets with meaningful sample sizes and consistently poor accuracy
 LOW_ACCURACY_ASSETS = {
-    "XLV", "MSFT", "BK", "XLK", "QQQ", "META", "RBLX", "XLY",
-    "CORN", "XLU", "WEAT", "PLTR", "NVDA", "SPY", "V"
+    "WMT", "ZW=F", "ROK", "GILD", "YUM", "SYK", "MPC", "AMGN",
+    "TJX", "NOC", "HON", "TWLO", "CAT", "NET", "XYL", "UNH",
+    "JPM", "WFC", "MS", "DLTR", "DG", "COF", "PH", "SCHW",
+    "DOV", "USB", "CFG", "XLI", "DE", "GOOGL"
 }
 SECTOR_ETFS = {
     "AAPL": "XLK", "GOOGL": "XLK", "NVDA": "XLK", "MSFT": "XLK",
@@ -214,24 +216,22 @@ def check_gap(closes):
 def check_signal_quality(score, rsi, near_support, bullish_momentum,
                           near_resistance, bearish_momentum):
     """
-    Requires at least TWO strong confirming signals for BUY or AVOID.
-    Strong bullish: RSI oversold, near support, bullish momentum
-    Strong bearish: RSI overbought, near resistance, bearish momentum
+    Requires score >= 8 AND at least ONE strong confirming signal.
+    Strong bullish: RSI oversold (<35), near support, or bullish momentum
+    Strong bearish: RSI overbought (>65), near resistance, or bearish momentum
     """
-    if score >= 8:
-        strong_bull_count = sum([
-            rsi is not None and rsi < 35,
-            near_support is True,
+    if score >= 7:
+        return (
+            (rsi is not None and rsi < 35) or
+            near_support is True or
             bullish_momentum is True
-        ])
-        return strong_bull_count >= 2
-    elif score <= -8:
-        strong_bear_count = sum([
-            rsi is not None and rsi > 65,
-            near_resistance is True,
+        )
+    elif score <= -7:
+        return (
+            (rsi is not None and rsi > 65) or
+            near_resistance is True or
             bearish_momentum is True
-        ])
-        return strong_bear_count >= 2
+        )
     return False
 
 def calculate_adx(hist, period=14):
@@ -490,7 +490,7 @@ def screen_ticker(ticker, market_regime="BULL"):
             reasons.append("Bearish momentum confirmed — price and RSI both turning down")
 
         # Signal thresholds with quality check
-        if score >= 8 and check_signal_quality(score, rsi, near_support, bullish_momentum,
+        if score >= 7 and check_signal_quality(score, rsi, near_support, bullish_momentum,
                                                 near_resistance, bearish_momentum):
             if market_regime == "BEAR":
                 signal = "WATCH"
@@ -500,7 +500,7 @@ def screen_ticker(ticker, market_regime="BULL"):
                 reasons.append("BUY suppressed — within earnings exclusion window")
             else:
                 signal = "BUY"
-        elif score <= -8 and check_signal_quality(score, rsi, near_support, bullish_momentum,
+        elif score <= -7 and check_signal_quality(score, rsi, near_support, bullish_momentum,
                                                    near_resistance, bearish_momentum):
             signal = "AVOID"
         elif abs(score) >= 3:

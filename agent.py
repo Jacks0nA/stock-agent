@@ -12,17 +12,30 @@ load_dotenv()
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 HIGH_ACCURACY_ASSETS = {
-    "SPY": 63.8, "DOGE-USD": 63.6, "WEAT": 63.5, "MDB": 63.0,
-    "V": 61.7, "BMY": 61.0, "SYK": 60.8, "HAL": 60.7,
-    "SCHW": 60.0, "MS": 59.7, "ZM": 59.5, "OVV": 67.9,
-    "JPM": 66.7, "VLO": 77.8, "PSX": 75.0, "GD": 76.9,
-    "ZW=F": 75.0, "PFE": 72.7, "AMD": 66.7, "VRTX": 66.7
+    "HAL": 80.0,
+    "SNAP": 80.0,
+    "XRP-USD": 71.4,
 }
 
 LOW_ACCURACY_ASSETS = {
-    "FANG": 44.3, "AMZN": 43.6, "UNH": 43.5, "C": 43.3,
-    "TMO": 42.9, "GC=F": 42.2, "RF": 42.1, "DVN": 41.2,
-    "RTX": 40.0, "CPER": 36.7
+    "WMT": 0.0,
+    "ZW=F": 0.0,
+    "ROK": 0.0,
+    "GILD": 0.0,
+    "YUM": 0.0,
+    "SYK": 0.0,
+    "MPC": 0.0,
+    "AMGN": 0.0,
+    "TJX": 5.3,
+    "NOC": 7.1,
+    "HON": 9.1,
+    "TWLO": 9.1,
+    "CAT": 9.1,
+    "NET": 12.5,
+    "UNH": 14.3,
+    "JPM": 14.3,
+    "WFC": 15.4,
+    "MS": 16.7,
 }
 
 def get_accuracy_context(tickers):
