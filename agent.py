@@ -117,7 +117,7 @@ Provide:
 
 Then:
 🟢 BUY: ticker, why, LONG/SHORT, hold time, entry, target, stop, R:R, confidence
-🔴 AVOID: ticker, why, what changes your mind
+🔴 AVOID: only flag if options flow or insider data strongly confirms bearish case — not from technicals alone
 ⚪ WATCH: ticker, specific trigger
 
 One line per stock: direction | confidence | reason

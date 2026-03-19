@@ -2,6 +2,14 @@ import yfinance as yf
 import pandas as pd
 from fetcher import calculate_rsi
 
+# Assets with proven low backtest accuracy — excluded from screening entirely
+LOW_ACCURACY_ASSETS = {
+    "FANG", "AMZN", "UNH", "C", "TMO", "GC=F", "RF", "DVN", "RTX", "CPER",
+    "CFG", "BNB-USD", "COF", "TJX", "NOC", "GILD", "FDX", "PEP", "DG", "MRK",
+    "HON", "USB", "SI=F", "DOV", "GE", "BIIB", "XLB", "USO", "AMGN", "CAT",
+    "WMT", "QSR", "SM", "AMD", "BKR", "WFC", "OVV"
+}
+
 ALL_TICKERS = {
     "Tech": [
         "AAPL", "GOOGL", "NVDA", "MSFT", "META", "TSLA", "INTC",
@@ -26,7 +34,7 @@ ALL_TICKERS = {
         "TJX", "ROST", "DG", "DLTR", "YUM", "DPZ", "QSR"
     ],
     "Industrial": [
-        "CAT", "DE", "GE", "HON", "MMM", "FDX",
+        "CAT", "DE", "HON", "MMM", "FDX",
         "NOC", "GD", "EMR", "PH", "ROK", "DOV", "XYL", "AME"
     ],
     "ETFs": [
@@ -37,23 +45,19 @@ ALL_TICKERS = {
         "USO", "UNG", "CORN", "WEAT"
     ],
     "Commodities_Futures": [
-        "CL=F", "GC=F", "SI=F", "HG=F", "ZW=F"
+        "CL=F", "SI=F", "HG=F", "ZW=F"
     ],
     "Crypto": [
         "SOL-USD", "BNB-USD", "XRP-USD",
         "ADA-USD", "DOGE-USD", "LINK-USD"
-    ],
-    "High_Accuracy": [
-        "SCHW", "MDB", "GD", "PFE", "ZM", "BMY", "OVV",
-        "VLO", "OKTA", "JPM", "PSX", "SYK", "MMM", "CRM",
-        "VRTX", "AMD", "ZW=F", "SPY", "V", "HAL", "MS", "WEAT"
     ]
 }
+
 def get_all_tickers():
     tickers = []
     for sector, stocks in ALL_TICKERS.items():
         tickers.extend(stocks)
-    return list(set(tickers))
+    return [t for t in set(tickers) if t not in LOW_ACCURACY_ASSETS]
 
 def calculate_adx(hist, period=14):
     try:
@@ -143,7 +147,6 @@ def screen_ticker(ticker):
         prev_price = round(closes.iloc[-2], 2)
         change_pct = round(((current_price - prev_price) / prev_price) * 100, 2)
 
-        rsi_series = pd.Series([calculate_rsi(closes.iloc[:i+1]) for i in range(len(closes))])
         rsi = calculate_rsi(closes)
         ma20 = round(closes.rolling(window=20).mean().iloc[-1], 2)
         ma50 = round(closes.rolling(window=50).mean().iloc[-1], 2)
@@ -172,6 +175,7 @@ def screen_ticker(ticker):
         score = 0
         reasons = []
 
+        # RSI
         if rsi < 30:
             score += 3
             reasons.append(f"RSI oversold ({rsi})")
@@ -185,6 +189,7 @@ def screen_ticker(ticker):
             score -= 1
             reasons.append(f"RSI elevated ({rsi})")
 
+        # MA crossover
         if crossed_above_ma20:
             score += 2
             reasons.append("Price crossed above MA20")
@@ -192,6 +197,7 @@ def screen_ticker(ticker):
             score -= 2
             reasons.append("Price crossed below MA20")
 
+        # Price vs MAs
         if current_price > ma20 and current_price > ma50:
             score += 1
             reasons.append("Above both MAs")
@@ -199,6 +205,7 @@ def screen_ticker(ticker):
             score -= 1
             reasons.append("Below both MAs")
 
+        # MA alignment
         if ma20 > ma50:
             score += 1
             reasons.append("MA20 above MA50 — bullish structure")
@@ -206,6 +213,7 @@ def screen_ticker(ticker):
             score -= 1
             reasons.append("MA20 below MA50 — bearish structure")
 
+        # Volume
         if volume_ratio > 2:
             if change_pct > 0:
                 score += 2
@@ -221,6 +229,7 @@ def screen_ticker(ticker):
                 score -= 1
                 reasons.append(f"Above avg volume selling ({volume_ratio}x)")
 
+        # Distance from 30d range
         if pct_from_low < 2:
             score += 1
             reasons.append("Near 30d low — potential bounce")
@@ -228,6 +237,7 @@ def screen_ticker(ticker):
             score -= 1
             reasons.append("Near 30d high — potential resistance")
 
+        # ADX trend strength
         if adx is not None:
             if adx > 25:
                 if plus_di > minus_di:
@@ -239,6 +249,7 @@ def screen_ticker(ticker):
             elif adx < 20:
                 reasons.append(f"Weak trend — ranging market (ADX {adx})")
 
+        # Support / resistance
         if near_support:
             score += 2
             reasons.append(f"Near key support (${support})")
@@ -246,6 +257,7 @@ def screen_ticker(ticker):
             score -= 2
             reasons.append(f"Near key resistance (${resistance})")
 
+        # Momentum confirmation
         if bullish_momentum:
             score += 2
             reasons.append("Bullish momentum confirmed — price and RSI both turning up")
@@ -253,9 +265,10 @@ def screen_ticker(ticker):
             score -= 2
             reasons.append("Bearish momentum confirmed — price and RSI both turning down")
 
-        if score >= 4:
+        # Signal thresholds
+        if score >= 6:
             signal = "BUY"
-        elif score <= -4:
+        elif score <= -6:
             signal = "AVOID"
         elif abs(score) >= 3:
             signal = "WATCH"
@@ -291,7 +304,7 @@ def run_screen(tickers=None):
     if tickers is None:
         tickers = get_all_tickers()
 
-    print(f"Screening {len(tickers)} assets...")
+    print(f"Screening {len(tickers)} assets (low accuracy assets pre-excluded)...")
 
     results = []
     for i, ticker in enumerate(tickers):
@@ -302,27 +315,22 @@ def run_screen(tickers=None):
             print(f"  Screened {i + 1}/{len(tickers)}...")
 
     buy = [r for r in results if r["signal"] == "BUY"]
-    avoid = [r for r in results if r["signal"] == "AVOID"]
     watch = [r for r in results if r["signal"] == "WATCH"]
 
-    shortlist = buy + avoid + watch
+    # AVOID signals excluded — backtest shows only 24.6% accuracy, not reliable
+    shortlist = buy + watch
     shortlist.sort(key=lambda x: abs(x["score"]), reverse=True)
     shortlist = shortlist[:15]
 
     print(f"\nSCREENER RESULTS")
     print(f"================")
     print(f"Total screened: {len(results)}")
-    print(f"BUY signals: {len(buy)}")
-    print(f"AVOID signals: {len(avoid)}")
+    print(f"BUY signals:   {len(buy)}")
     print(f"WATCH signals: {len(watch)}")
     print(f"Shortlist for Claude: {len(shortlist)}")
 
     print(f"\nTOP BUY SIGNALS:")
     for r in buy[:5]:
-        print(f"  {r['ticker']} — Score: {r['score']} — {', '.join(r['reasons'])}")
-
-    print(f"\nTOP AVOID SIGNALS:")
-    for r in avoid[:5]:
         print(f"  {r['ticker']} — Score: {r['score']} — {', '.join(r['reasons'])}")
 
     return shortlist
