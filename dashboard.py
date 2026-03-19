@@ -185,8 +185,12 @@ def run_full_analysis(mode="Manual"):
     return analysis, tickers
 
 st.title("AI Stock Market Agent")
-st.caption("v1.3 — Manual and Daily modes — Active mode coming when you start trading")
-
+import subprocess
+try:
+    git_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode().strip()
+except Exception:
+    git_hash = "unknown"
+st.caption(f"Build {git_hash} — Manual and Daily modes — Active mode coming when you start trading")
 st.sidebar.title("Mode")
 mode = st.sidebar.radio(
     "Select mode",
