@@ -8,9 +8,9 @@ LOW_ACCURACY_ASSETS = {
     "FANG", "AMZN", "UNH", "C", "TMO", "GC=F", "RF", "DVN", "RTX", "CPER",
     "CFG", "BNB-USD", "COF", "TJX", "NOC", "GILD", "FDX", "PEP", "DG", "MRK",
     "HON", "USB", "SI=F", "DOV", "GE", "BIIB", "XLB", "USO", "AMGN", "CAT",
-    "WMT", "QSR", "SM", "AMD", "BKR", "WFC", "OVV"
+    "WMT", "QSR", "SM", "AMD", "BKR", "WFC", "OVV",
+    "SPOT", "XLF", "EEM", "GS", "LINK-USD", "TWLO", "SHOP", "PH"
 }
-
 SECTOR_ETFS = {
     "AAPL": "XLK", "GOOGL": "XLK", "NVDA": "XLK", "MSFT": "XLK",
     "META": "XLK", "TSLA": "XLK", "INTC": "XLK", "CRM": "XLK",
