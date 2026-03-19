@@ -249,13 +249,13 @@ def screen_ticker(ticker):
             elif adx < 20:
                 reasons.append(f"Weak trend — ranging market (ADX {adx})")
 
-        # Support / resistance
+        # Support / resistance — no $ sign to avoid Streamlit rendering bug
         if near_support:
             score += 2
-            reasons.append(f"Near key support (${support})")
+            reasons.append(f"Near key support ({support})")
         elif near_resistance:
             score -= 2
-            reasons.append(f"Near key resistance (${resistance})")
+            reasons.append(f"Near key resistance ({resistance})")
 
         # Momentum confirmation
         if bullish_momentum:
@@ -317,7 +317,7 @@ def run_screen(tickers=None):
     buy = [r for r in results if r["signal"] == "BUY"]
     watch = [r for r in results if r["signal"] == "WATCH"]
 
-    # AVOID signals excluded — backtest shows only 24.6% accuracy, not reliable
+    # AVOID excluded — backtest shows only 24.6% accuracy
     shortlist = buy + watch
     shortlist.sort(key=lambda x: abs(x["score"]), reverse=True)
     shortlist = shortlist[:15]
