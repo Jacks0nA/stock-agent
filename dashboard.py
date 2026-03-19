@@ -9,12 +9,11 @@ from sectors import get_market_context, get_market_summary
 from screener import run_screen
 from insider import get_insider_summary
 from options import get_options_summary
-from logger import save_daily_log, get_todays_log, list_recent_logs
+from logger import save_daily_log, get_all_dates, get_log_for_date_window, read_log_file, delete_date_logs
 import json
 import os
 
 SCHEDULE_FILE = "schedule_state.json"
-
 GMT = timezone.utc
 
 DAILY_WINDOWS = [
@@ -65,8 +64,21 @@ def get_next_window():
         window_time = now.replace(hour=window["hour"], minute=window["minute"], second=0, microsecond=0)
         if window_time > now:
             return window, window_time
-    tomorrow = (now + timedelta(days=1)).replace(hour=DAILY_WINDOWS[0]["hour"], minute=DAILY_WINDOWS[0]["minute"], second=0, microsecond=0)
+    tomorrow = (now + timedelta(days=1)).replace(
+        hour=DAILY_WINDOWS[0]["hour"],
+        minute=DAILY_WINDOWS[0]["minute"],
+        second=0, microsecond=0
+    )
     return DAILY_WINDOWS[0], tomorrow
+
+def mark_all_todays_windows_done():
+    state = load_schedule_state()
+    today = datetime.now(GMT).strftime("%Y-%m-%d")
+    for window in DAILY_WINDOWS:
+        key = get_window_key(window, today)
+        if key not in state.get("last_run_windows", {}):
+            state.setdefault("last_run_windows", {})[key] = "skipped"
+    save_schedule_state(state)
 
 def mark_window_complete(window):
     state = load_schedule_state()
@@ -132,7 +144,10 @@ def run_full_analysis(mode="Manual"):
         news = fetch_stock_news(tickers)
 
     with st.spinner(f"Claude analysing — {mode} mode..."):
-        analysis = analyse_stocks(df, news, historical, earnings, market_context, insider_summary, options_summary)
+        analysis = analyse_stocks(
+            df, news, historical, earnings,
+            market_context, insider_summary, options_summary
+        )
 
     st.subheader("Claude's Analysis")
     st.write(analysis)
@@ -146,7 +161,6 @@ st.title("AI Stock Market Agent")
 st.caption("Manual and Daily modes — Active mode coming when you start trading")
 
 st.sidebar.title("Mode")
-
 mode = st.sidebar.radio(
     "Select mode",
     ["Manual", "Daily"],
@@ -164,7 +178,7 @@ hours_until = int(time_until.total_seconds() // 3600)
 mins_until = int((time_until.total_seconds() % 3600) // 60)
 st.sidebar.info(f"Next window: {next_window['name']}\n{next_time.strftime('%H:%M GMT')} — in {hours_until}h {mins_until}m")
 
-tab1, tab2 = st.tabs(["Analysis", "Today's Log"])
+tab1, tab2 = st.tabs(["Analysis", "Logs"])
 
 with tab1:
     if mode == "Manual":
@@ -180,23 +194,72 @@ with tab1:
         if missed_window:
             mins_ago = int((now_gmt - missed_time).total_seconds() / 60)
             st.warning(f"Missed window detected: {missed_window['name']} ({missed_time.strftime('%H:%M GMT')} — {mins_ago} mins ago). Running now...")
-            analysis, tickers = run_full_analysis(mode=f"Daily — {missed_window['name']}")
-            mark_window_complete(missed_window)
+            run_full_analysis(mode=f"Daily — {missed_window['name']}")
+            mark_all_todays_windows_done()
             st.rerun()
-
         else:
             st.success("All windows for today are complete or not yet due.")
             st.write("The app will auto-run when you open it during a scheduled window.")
-
             if st.button("Run Manual Check Now", type="secondary"):
                 run_full_analysis(mode="Manual")
 
 with tab2:
-    st.subheader("Today's Analysis Log")
-    log_content = get_todays_log()
-    st.text(log_content)
+    st.subheader("Analysis Logs")
 
-    st.subheader("Recent Log Files")
-    recent_logs = list_recent_logs()
-    for log_file in recent_logs:
-        st.write(f"📄 logs/{log_file}")
+    all_dates = get_all_dates()
+
+    if not all_dates:
+        st.info("No logs yet — run your first analysis to get started.")
+    else:
+        for date in all_dates:
+            col_date, col_delete = st.columns([5, 1])
+
+            with col_date:
+                st.markdown(f"### 📅 {date}")
+
+            with col_delete:
+                if st.button("🗑️ Delete", key=f"delete_{date}"):
+                    delete_date_logs(date)
+                    st.success(f"Deleted logs for {date}")
+                    st.rerun()
+
+            opening_tab, midday_tab, closing_tab, manual_tab = st.tabs([
+                "🔔 Opening", "☀️ Midday", "🔔 Pre-Close", "✋ Manual"
+            ])
+
+            with opening_tab:
+                filepath = get_log_for_date_window(date, "opening")
+                content = read_log_file(filepath)
+                if content:
+                    st.text(content)
+                else:
+                    st.caption("Window missed or not yet run.")
+
+            with midday_tab:
+                filepath = get_log_for_date_window(date, "midday")
+                content = read_log_file(filepath)
+                if content:
+                    st.text(content)
+                else:
+                    st.caption("Window missed or not yet run.")
+
+            with closing_tab:
+                filepath = get_log_for_date_window(date, "closing")
+                content = read_log_file(filepath)
+                if content:
+                    st.text(content)
+                else:
+                    st.caption("Window missed or not yet run.")
+
+            with manual_tab:
+                manual_logs = get_log_for_date_window(date, "manual") or []
+                if manual_logs:
+                    for i, filepath in enumerate(manual_logs):
+                        content = read_log_file(filepath)
+                        if content:
+                            st.markdown(f"**Manual run {i+1}**")
+                            st.text(content)
+                else:
+                    st.caption("No manual analyses run on this date.")
+
+            st.divider()
