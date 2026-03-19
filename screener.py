@@ -59,6 +59,26 @@ def get_all_tickers():
         tickers.extend(stocks)
     return [t for t in set(tickers) if t not in LOW_ACCURACY_ASSETS]
 
+def get_market_regime():
+    """
+    Returns 'BULL', 'BEAR', or 'NEUTRAL' based on SPY vs its 50MA.
+    BULL  — SPY above 50MA, safe to take BUY signals
+    BEAR  — SPY below 50MA, suppress BUY signals
+    NEUTRAL — data unavailable, allow signals through
+    """
+    try:
+        spy = yf.Ticker("SPY")
+        hist = spy.history(period="3mo")
+        hist.index = hist.index.tz_localize(None)
+        current = hist["Close"].iloc[-1]
+        ma50 = hist["Close"].rolling(window=50).mean().iloc[-1]
+        if current > ma50:
+            return "BULL", round(current, 2), round(ma50, 2)
+        else:
+            return "BEAR", round(current, 2), round(ma50, 2)
+    except Exception:
+        return "NEUTRAL", None, None
+
 def calculate_adx(hist, period=14):
     try:
         high = hist["High"]
@@ -131,7 +151,29 @@ def check_momentum_confirmation(closes, rsi_series):
     except Exception:
         return False, False
 
-def screen_ticker(ticker):
+def check_signal_quality(score, rsi, near_support, bullish_momentum, near_resistance, bearish_momentum):
+    """
+    Requires at least one strong confirming signal for BUY or AVOID.
+    Strong bullish confirmers: RSI oversold, near support, bullish momentum
+    Strong bearish confirmers: RSI overbought, near resistance, bearish momentum
+    """
+    if score >= 6:
+        strong_bull = (
+            (rsi is not None and rsi < 35) or
+            near_support or
+            bullish_momentum
+        )
+        return strong_bull
+    elif score <= -6:
+        strong_bear = (
+            (rsi is not None and rsi > 65) or
+            near_resistance or
+            bearish_momentum
+        )
+        return strong_bear
+    return False
+
+def screen_ticker(ticker, market_regime="BULL"):
     try:
         stock = yf.Ticker(ticker)
         hist = stock.history(period="1y")
@@ -249,7 +291,7 @@ def screen_ticker(ticker):
             elif adx < 20:
                 reasons.append(f"Weak trend — ranging market (ADX {adx})")
 
-        # Support / resistance — no $ sign to avoid Streamlit rendering bug
+        # Support / resistance
         if near_support:
             score += 2
             reasons.append(f"Near key support ({support})")
@@ -265,10 +307,15 @@ def screen_ticker(ticker):
             score -= 2
             reasons.append("Bearish momentum confirmed — price and RSI both turning down")
 
-        # Signal thresholds
-        if score >= 6:
-            signal = "BUY"
-        elif score <= -6:
+        # Signal thresholds with quality check
+        if score >= 6 and check_signal_quality(score, rsi, near_support, bullish_momentum, near_resistance, bearish_momentum):
+            # Suppress BUY signals in bear market regime
+            if market_regime == "BEAR":
+                signal = "WATCH"
+                reasons.append("BUY suppressed — bear market regime (SPY below 50MA)")
+            else:
+                signal = "BUY"
+        elif score <= -6 and check_signal_quality(score, rsi, near_support, bullish_momentum, near_resistance, bearish_momentum):
             signal = "AVOID"
         elif abs(score) >= 3:
             signal = "WATCH"
@@ -304,11 +351,19 @@ def run_screen(tickers=None):
     if tickers is None:
         tickers = get_all_tickers()
 
-    print(f"Screening {len(tickers)} assets (low accuracy assets pre-excluded)...")
+    # Check market regime first
+    regime, spy_price, spy_ma50 = get_market_regime()
+    print(f"\nMARKET REGIME: {regime}")
+    if spy_price:
+        print(f"SPY: {spy_price} | 50MA: {spy_ma50}")
+    if regime == "BEAR":
+        print("WARNING: Bear market regime — BUY signals suppressed")
+
+    print(f"\nScreening {len(tickers)} assets (low accuracy assets pre-excluded)...")
 
     results = []
     for i, ticker in enumerate(tickers):
-        result = screen_ticker(ticker)
+        result = screen_ticker(ticker, market_regime=regime)
         if result:
             results.append(result)
         if (i + 1) % 20 == 0:
@@ -324,6 +379,7 @@ def run_screen(tickers=None):
 
     print(f"\nSCREENER RESULTS")
     print(f"================")
+    print(f"Market regime: {regime}")
     print(f"Total screened: {len(results)}")
     print(f"BUY signals:   {len(buy)}")
     print(f"WATCH signals: {len(watch)}")
@@ -333,7 +389,7 @@ def run_screen(tickers=None):
     for r in buy[:5]:
         print(f"  {r['ticker']} — Score: {r['score']} — {', '.join(r['reasons'])}")
 
-    return shortlist
+    return shortlist, regime
 
 if __name__ == "__main__":
     run_screen()

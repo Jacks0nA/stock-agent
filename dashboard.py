@@ -116,7 +116,7 @@ def mark_window_complete(window):
 
 def run_full_analysis(mode="Manual"):
     with st.spinner("Stage 1 — Screening assets..."):
-        shortlist = run_screen()
+        shortlist, market_regime = run_screen()
 
     tickers = [r["ticker"] for r in shortlist]
 
