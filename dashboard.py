@@ -158,7 +158,7 @@ def run_full_analysis(mode="Manual"):
     return analysis, tickers
 
 st.title("AI Stock Market Agent")
-st.caption("Manual and Daily modes — Active mode coming when you start trading")
+st.caption("v1.0 — Manual and Daily modes — Active mode coming when you start trading")
 
 st.sidebar.title("Mode")
 mode = st.sidebar.radio(
