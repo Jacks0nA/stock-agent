@@ -116,9 +116,11 @@ Provide:
 4. Session comparison (what changed)
 
 Then:
-🟢 BUY: ticker, why, LONG/SHORT, hold time, entry, target, stop, R:R, confidence
+🟢 BUY: only if a genuinely high quality setup exists — ticker, why, LONG/SHORT, hold time, entry, target, stop, R:R, confidence. If no strong setup exists, say "NO TRADE TODAY" and explain why.
 🔴 AVOID: only flag if options flow or insider data strongly confirms bearish case — not from technicals alone
 ⚪ WATCH: ticker, specific trigger
+
+It is always better to say NO TRADE TODAY than to force a low quality setup. Capital preservation is the priority. Only recommend a BUY if you would genuinely be confident putting your own money in.
 
 One line per stock: direction | confidence | reason
 
