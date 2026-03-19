@@ -1,20 +1,23 @@
 import os
 import json
+import httpx
 from datetime import datetime
-from supabase import create_client
 from dotenv import load_dotenv
 
 load_dotenv()
 
-def get_client():
-    url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_KEY")
-    return create_client(url, key)
+def get_headers():
+    return {
+        "apikey": os.getenv("SUPABASE_KEY"),
+        "Authorization": f"Bearer {os.getenv('SUPABASE_KEY')}",
+        "Content-Type": "application/json"
+    }
+
+def get_base_url():
+    return os.getenv("SUPABASE_URL")
 
 def save_analysis(tickers, analysis, historical):
     try:
-        client = get_client()
-
         indicators = {}
         for ticker in tickers:
             if ticker in historical and historical[ticker]:
@@ -26,26 +29,35 @@ def save_analysis(tickers, analysis, historical):
                     "volume_signal": historical[ticker].get("volume_signal")
                 }
 
-        client.table("memory").insert({
+        url = f"{get_base_url()}/rest/v1/memory"
+        httpx.post(url, headers=get_headers(), json={
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "analysis": analysis,
             "indicators": indicators
-        }).execute()
+        })
 
-        # Keep only last 50 entries — delete older ones
-        all_rows = client.table("memory").select("id").order("id", desc=False).execute()
-        if len(all_rows.data) > 50:
-            oldest_ids = [r["id"] for r in all_rows.data[:-50]]
-            client.table("memory").delete().in_("id", oldest_ids).execute()
+        # Keep only last 50 — delete oldest if over limit
+        all_rows = httpx.get(
+            f"{get_base_url()}/rest/v1/memory?select=id&order=id.asc",
+            headers=get_headers()
+        ).json()
+
+        if len(all_rows) > 50:
+            oldest_ids = [r["id"] for r in all_rows[:-50]]
+            for oid in oldest_ids:
+                httpx.delete(
+                    f"{get_base_url()}/rest/v1/memory?id=eq.{oid}",
+                    headers=get_headers()
+                )
 
     except Exception as e:
         print(f"Memory save error: {e}")
 
 def load_memory():
     try:
-        client = get_client()
-        result = client.table("memory").select("*").order("id", desc=False).execute()
-        return result.data or []
+        url = f"{get_base_url()}/rest/v1/memory?select=*&order=id.asc"
+        response = httpx.get(url, headers=get_headers())
+        return response.json()
     except Exception as e:
         print(f"Memory load error: {e}")
         return []

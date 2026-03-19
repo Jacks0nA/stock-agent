@@ -1,5 +1,8 @@
 import streamlit as st
 import time
+import os
+import json
+import httpx
 from datetime import datetime, timezone, timedelta
 from fetcher import fetch_stock_data, fetch_historical_data
 from agent import analyse_stocks
@@ -10,9 +13,6 @@ from screener import run_screen
 from insider import get_insider_summary
 from options import get_options_summary
 from logger import save_daily_log, get_all_dates, get_log_for_date_window, read_log_file, delete_date_logs
-import json
-import os
-from supabase import create_client
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -25,17 +25,23 @@ DAILY_WINDOWS = [
     {"name": "US Pre-Close", "hour": 20, "minute": 30},
 ]
 
-def get_supabase():
-    url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_KEY")
-    return create_client(url, key)
+def get_headers():
+    return {
+        "apikey": os.getenv("SUPABASE_KEY"),
+        "Authorization": f"Bearer {os.getenv('SUPABASE_KEY')}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates"
+    }
+
+def get_base_url():
+    return os.getenv("SUPABASE_URL")
 
 def load_schedule_state():
     try:
-        client = get_supabase()
-        result = client.table("schedule_state").select("*").execute()
+        url = f"{get_base_url()}/rest/v1/schedule_state?select=*"
+        response = httpx.get(url, headers=get_headers())
         state = {"last_run_windows": {}}
-        for row in result.data:
+        for row in response.json():
             if row["key"].startswith("window_"):
                 state["last_run_windows"][row["key"][7:]] = row["value"]
         return state
@@ -44,12 +50,12 @@ def load_schedule_state():
 
 def save_schedule_state(state):
     try:
-        client = get_supabase()
+        url = f"{get_base_url()}/rest/v1/schedule_state"
         for key, value in state.get("last_run_windows", {}).items():
-            client.table("schedule_state").upsert({
+            httpx.post(url, headers=get_headers(), json={
                 "key": f"window_{key}",
                 "value": value
-            }).execute()
+            })
     except Exception as e:
         print(f"Schedule state save error: {e}")
 
@@ -179,7 +185,7 @@ def run_full_analysis(mode="Manual"):
     return analysis, tickers
 
 st.title("AI Stock Market Agent")
-st.caption("v1.0 — Manual and Daily modes — Active mode coming when you start trading")
+st.caption("v1.1 — Manual and Daily modes — Active mode coming when you start trading")
 
 st.sidebar.title("Mode")
 mode = st.sidebar.radio(
