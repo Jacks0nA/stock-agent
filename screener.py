@@ -6,10 +6,10 @@ from datetime import datetime
 # Assets excluded based on 2-year backtest with min 5 signals
 # Only excluding assets with meaningful sample sizes and consistently poor accuracy
 LOW_ACCURACY_ASSETS = {
-    "WMT", "ZW=F", "ROK", "GILD", "YUM", "SYK", "MPC", "AMGN",
-    "TJX", "NOC", "HON", "TWLO", "CAT", "NET", "XYL", "UNH",
-    "JPM", "WFC", "MS", "DLTR", "DG", "COF", "PH", "SCHW",
-    "DOV", "USB", "CFG", "XLI", "DE", "GOOGL"
+    "XLY", "ZW=F", "RBLX", "QQQ", "NVDA", "C", "BTC-USD",
+    "RF", "RTX", "XLK", "PH", "META", "MSFT", "XLI",
+    "GE", "XLU", "EEM", "AMD", "GC=F", "ZM", "NFLX",
+    "BK", "UBER", "SI=F", "SPY", "BKR", "V"
 }
 SECTOR_ETFS = {
     "AAPL": "XLK", "GOOGL": "XLK", "NVDA": "XLK", "MSFT": "XLK",
@@ -40,15 +40,17 @@ ALL_TICKERS = {
     ],
     "Finance": [
         "JPM", "BAC", "GS", "MS", "V", "AXP", "WFC", "BLK",
-        "SCHW", "COF", "USB", "BK", "CFG"
+        "SCHW", "COF", "USB", "BK", "CFG", "C", "RF"
     ],
     "Healthcare": [
         "PFE", "UNH", "MRK", "ABBV", "ABT", "DHR",
-        "AMGN", "GILD", "BIIB", "VRTX", "SYK", "MDT"
+        "AMGN", "GILD", "BIIB", "VRTX", "SYK", "MDT",
+        "BMY", "TMO"
     ],
     "Energy": [
         "COP", "EOG", "MPC", "VLO", "PSX",
-        "OXY", "HAL", "BKR", "OVV", "SM", "APA"
+        "OXY", "HAL", "BKR", "OVV", "SM", "APA",
+        "DVN", "FANG"
     ],
     "Consumer": [
         "WMT", "PEP", "MCD", "SBUX", "NKE",
@@ -56,20 +58,21 @@ ALL_TICKERS = {
     ],
     "Industrial": [
         "CAT", "DE", "HON", "MMM", "FDX",
-        "NOC", "GD", "EMR", "PH", "ROK", "DOV", "XYL", "AME"
+        "NOC", "GD", "EMR", "PH", "ROK", "DOV", "XYL", "AME",
+        "RTX", "GE"
     ],
     "ETFs": [
         "SPY", "QQQ", "IWM", "DIA", "XLK", "XLF", "XLV", "XLY",
         "XLI", "XLB", "XLU", "EEM"
     ],
     "Commodities_ETF": [
-        "USO", "UNG", "CORN", "WEAT"
+        "USO", "UNG", "CORN", "WEAT", "CPER"
     ],
     "Commodities_Futures": [
-        "CL=F", "SI=F", "HG=F", "ZW=F"
+        "CL=F", "GC=F", "SI=F", "HG=F", "ZW=F"
     ],
     "Crypto": [
-        "SOL-USD", "BNB-USD", "XRP-USD",
+        "BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD",
         "ADA-USD", "DOGE-USD", "LINK-USD"
     ]
 }
