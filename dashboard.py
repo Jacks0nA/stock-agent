@@ -13,7 +13,12 @@ from screener import run_screen
 from insider import get_insider_summary
 from options import get_options_summary
 from logger import save_daily_log, get_all_dates, get_log_for_date_window, read_log_file, delete_date_logs
+from portfolio import (
+    get_portfolio_balance, get_open_positions, get_closed_positions,
+    get_current_prices, STARTING_BALANCE
+)
 from dotenv import load_dotenv
+import subprocess
 
 load_dotenv()
 
@@ -114,7 +119,14 @@ def mark_window_complete(window):
     state.setdefault("last_run_windows", {})[key] = datetime.now(GMT).strftime("%Y-%m-%d %H:%M")
     save_schedule_state(state)
 
-def run_full_analysis(mode="Manual"):
+def is_market_open():
+    now = datetime.now(GMT)
+    market_open = now.replace(hour=13, minute=30, second=0, microsecond=0)
+    market_close = now.replace(hour=20, minute=0, second=0, microsecond=0)
+    is_weekend = now.weekday() >= 5
+    return not is_weekend and market_open <= now <= market_close
+
+def run_full_analysis(mode="Manual", market_is_open=True):
     with st.spinner("Stage 1 — Screening assets..."):
         shortlist, market_regime = run_screen()
 
@@ -170,10 +182,14 @@ def run_full_analysis(mode="Manual"):
     with st.spinner("Fetching news..."):
         news = fetch_stock_news(tickers)
 
+    if not market_is_open:
+        st.info("Markets are currently closed — analysis running but no new positions will be opened.")
+
     with st.spinner(f"Claude analysing — {mode} mode..."):
         analysis = analyse_stocks(
             df, news, historical, earnings,
-            market_context, insider_summary, options_summary
+            market_context, insider_summary, options_summary,
+            market_is_open=market_is_open
         )
 
     st.subheader("Claude's Analysis")
@@ -184,8 +200,14 @@ def run_full_analysis(mode="Manual"):
 
     return analysis, tickers
 
+# Version
+try:
+    git_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode().strip()
+except Exception:
+    git_hash = "unknown"
+
 st.title("AI Stock Market Agent")
-st.caption("v1.4 — Manual and Daily modes — Active mode coming when you start trading")
+st.caption(f"Build {git_hash} — Manual and Daily modes — Active mode coming when you start trading")
 
 st.sidebar.title("Mode")
 mode = st.sidebar.radio(
@@ -211,7 +233,16 @@ with tab1:
     if mode == "Manual":
         st.info("Manual mode — press the button to run one analysis.")
         if st.button("Run Analysis Now", type="primary"):
-            run_full_analysis(mode="Manual")
+            now = datetime.now(GMT)
+            market_open = now.replace(hour=13, minute=30, second=0, microsecond=0)
+            market_close = now.replace(hour=20, minute=0, second=0, microsecond=0)
+            is_weekend = now.weekday() >= 5
+            market_open_flag = not is_weekend and market_open <= now <= market_close
+            if is_weekend:
+                st.warning("Markets are closed — it's the weekend. Analysis will run but no new positions will be opened.")
+            elif now < market_open or now > market_close:
+                st.warning("US markets are currently closed. Analysis will run but no new positions will be opened.")
+            run_full_analysis(mode="Manual", market_is_open=market_open_flag)
 
     elif mode == "Daily":
         st.info("Daily mode — auto-runs at US market open (14:30), midday (18:30), and pre-close (20:30) GMT.")
@@ -221,21 +252,22 @@ with tab1:
         if missed_window:
             mins_ago = int((now_gmt - missed_time).total_seconds() / 60)
             st.warning(f"Missed window detected: {missed_window['name']} ({missed_time.strftime('%H:%M GMT')} — {mins_ago} mins ago). Running now...")
-            run_full_analysis(mode=f"Daily — {missed_window['name']}")
+            now_check = datetime.now(GMT)
+            market_open_check = now_check.replace(hour=13, minute=30, second=0, microsecond=0)
+            market_close_check = now_check.replace(hour=20, minute=0, second=0, microsecond=0)
+            is_weekend_check = now_check.weekday() >= 5
+            market_open_flag = not is_weekend_check and market_open_check <= now_check <= market_close_check
+            run_full_analysis(mode=f"Daily — {missed_window['name']}", market_is_open=market_open_flag)
             mark_all_todays_windows_done()
             st.rerun()
         else:
             st.success("All windows for today are complete or not yet due.")
             st.write("The app will auto-run when you open it during a scheduled window.")
             if st.button("Run Manual Check Now", type="secondary"):
-                run_full_analysis(mode="Manual")
+                run_full_analysis(mode="Manual", market_is_open=is_market_open())
+
 with tab2:
     st.subheader("Paper Trading Portfolio")
-
-    from portfolio import (
-        get_portfolio_balance, get_open_positions, get_closed_positions,
-        get_current_prices, STARTING_BALANCE
-    )
 
     balance = get_portfolio_balance()
     open_positions = get_open_positions()
@@ -310,6 +342,7 @@ with tab2:
                 col3.metric("Size", f"£{p['position_size']}")
                 col3.metric("Confidence", p["confidence"])
                 st.caption(f"Reasoning: {p['claude_reasoning']}")
+
 with tab3:
     st.subheader("Analysis Logs")
 
