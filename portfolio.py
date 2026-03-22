@@ -1,0 +1,289 @@
+import os
+import json
+import httpx
+from datetime import datetime, timezone
+from dotenv import load_dotenv
+import yfinance as yf
+
+load_dotenv()
+
+GMT = timezone.utc
+MAX_POSITIONS = 5
+MAX_HOLD_DAYS = 10
+STARTING_BALANCE = 30000.0
+
+CONFIDENCE_SIZES = {
+    "LOW": 100.0,
+    "MEDIUM": 250.0,
+    "CONFIDENT": 1000.0,
+    "SUPER": 2000.0
+}
+
+def get_headers():
+    return {
+        "apikey": os.getenv("SUPABASE_KEY"),
+        "Authorization": f"Bearer {os.getenv('SUPABASE_KEY')}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates"
+    }
+
+def get_base_url():
+    return os.getenv("SUPABASE_URL")
+
+def get_portfolio_balance():
+    try:
+        url = f"{get_base_url()}/rest/v1/portfolio_state?key=eq.balance"
+        response = httpx.get(url, headers=get_headers())
+        data = response.json()
+        if data:
+            return float(data[0]["value"])
+        # Initialise balance if not set
+        set_portfolio_balance(STARTING_BALANCE)
+        return STARTING_BALANCE
+    except Exception as e:
+        print(f"Balance fetch error: {e}")
+        return STARTING_BALANCE
+
+def set_portfolio_balance(balance):
+    try:
+        url = f"{get_base_url()}/rest/v1/portfolio_state"
+        httpx.post(url, headers=get_headers(), json={
+            "key": "balance",
+            "value": str(balance)
+        }).execute()
+    except Exception as e:
+        print(f"Balance set error: {e}")
+
+def get_open_positions():
+    try:
+        url = f"{get_base_url()}/rest/v1/positions?status=eq.OPEN&order=opened_at.asc"
+        response = httpx.get(url, headers=get_headers())
+        return response.json() or []
+    except Exception as e:
+        print(f"Position fetch error: {e}")
+        return []
+
+def get_closed_positions():
+    try:
+        url = f"{get_base_url()}/rest/v1/positions?status=eq.CLOSED&order=closed_at.desc"
+        response = httpx.get(url, headers=get_headers())
+        return response.json() or []
+    except Exception as e:
+        print(f"Closed position fetch error: {e}")
+        return []
+
+def open_position(ticker, direction, entry_price, target_price, stop_loss,
+                  confidence, score, claude_reasoning, position_size=None):
+    try:
+        if position_size is None:
+            position_size = CONFIDENCE_SIZES.get(confidence, 100.0)
+
+        balance = get_portfolio_balance()
+        if position_size > balance:
+            print(f"Insufficient balance to open position in {ticker}")
+            return None
+
+        url = f"{get_base_url()}/rest/v1/positions"
+        data = {
+            "ticker": ticker,
+            "direction": direction,
+            "entry_price": entry_price,
+            "current_price": entry_price,
+            "target_price": target_price,
+            "stop_loss": stop_loss,
+            "position_size": position_size,
+            "confidence": confidence,
+            "score": score,
+            "opened_at": datetime.now(GMT).strftime("%Y-%m-%d %H:%M"),
+            "status": "OPEN",
+            "claude_reasoning": claude_reasoning,
+            "pnl": 0.0,
+            "pnl_pct": 0.0
+        }
+        response = httpx.post(url, headers=get_headers(), json=data)
+
+        # Deduct from balance
+        new_balance = balance - position_size
+        url2 = f"{get_base_url()}/rest/v1/portfolio_state"
+        httpx.post(url2, headers=get_headers(), json={
+            "key": "balance",
+            "value": str(new_balance)
+        })
+
+        print(f"Opened {direction} position in {ticker} — size £{position_size} — confidence {confidence}")
+        return response.json()
+
+    except Exception as e:
+        print(f"Open position error: {e}")
+        return None
+
+def close_position(position_id, exit_price, reason):
+    try:
+        # Get position details
+        url = f"{get_base_url()}/rest/v1/positions?id=eq.{position_id}"
+        response = httpx.get(url, headers=get_headers())
+        positions = response.json()
+        if not positions:
+            return None
+
+        position = positions[0]
+        entry_price = float(position["entry_price"])
+        position_size = float(position["position_size"])
+
+        # Calculate P&L
+        pnl_pct = ((exit_price - entry_price) / entry_price) * 100
+        pnl = position_size * (pnl_pct / 100)
+        return_amount = position_size + pnl
+
+        # Update position
+        update_url = f"{get_base_url()}/rest/v1/positions?id=eq.{position_id}"
+        httpx.patch(update_url, headers=get_headers(), json={
+            "status": "CLOSED",
+            "exit_price": exit_price,
+            "closed_at": datetime.now(GMT).strftime("%Y-%m-%d %H:%M"),
+            "pnl": round(pnl, 2),
+            "pnl_pct": round(pnl_pct, 2),
+            "claude_reasoning": reason
+        })
+
+        # Return capital + P&L to balance
+        balance = get_portfolio_balance()
+        new_balance = balance + return_amount
+        url2 = f"{get_base_url()}/rest/v1/portfolio_state"
+        httpx.post(url2, headers=get_headers(), json={
+            "key": "balance",
+            "value": str(new_balance)
+        })
+
+        print(f"Closed {position['ticker']} at £{exit_price} — P&L: £{round(pnl, 2)} ({round(pnl_pct, 2)}%)")
+        return pnl
+
+    except Exception as e:
+        print(f"Close position error: {e}")
+        return None
+
+def update_position(position_id, updates):
+    """
+    Update position fields — used for stop loss and target reassessment.
+    Enforces stop loss can only move up.
+    """
+    try:
+        # Enforce stop loss never moves down
+        if "stop_loss" in updates:
+            url = f"{get_base_url()}/rest/v1/positions?id=eq.{position_id}"
+            current = httpx.get(url, headers=get_headers()).json()
+            if current:
+                current_sl = float(current[0]["stop_loss"])
+                if updates["stop_loss"] < current_sl:
+                    print(f"Stop loss move rejected — cannot move down (current: {current_sl}, attempted: {updates['stop_loss']})")
+                    del updates["stop_loss"]
+
+        if not updates:
+            return
+
+        update_url = f"{get_base_url()}/rest/v1/positions?id=eq.{position_id}"
+        httpx.patch(update_url, headers=get_headers(), json=updates)
+
+    except Exception as e:
+        print(f"Update position error: {e}")
+
+def get_current_prices(tickers):
+    prices = {}
+    for ticker in tickers:
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period="1d")
+            if len(hist) > 0:
+                prices[ticker] = round(float(hist["Close"].iloc[-1]), 2)
+        except Exception:
+            prices[ticker] = None
+    return prices
+
+def check_stop_losses(open_positions, current_prices):
+    """
+    Automatically closes any position that has breached its stop loss.
+    Returns list of positions that were stopped out.
+    """
+    stopped_out = []
+    for position in open_positions:
+        ticker = position["ticker"]
+        current_price = current_prices.get(ticker)
+        if current_price is None:
+            continue
+        stop_loss = float(position["stop_loss"])
+        if current_price <= stop_loss:
+            print(f"STOP LOSS TRIGGERED: {ticker} at {current_price} (stop: {stop_loss})")
+            close_position(
+                position["id"],
+                current_price,
+                f"Stop loss triggered at {current_price} (stop was {stop_loss})"
+            )
+            stopped_out.append(ticker)
+    return stopped_out
+
+def check_max_hold(open_positions, current_prices):
+    """
+    Closes any position held longer than MAX_HOLD_DAYS.
+    """
+    closed = []
+    today = datetime.now(GMT)
+    for position in open_positions:
+        opened = datetime.strptime(position["opened_at"], "%Y-%m-%d %H:%M").replace(tzinfo=GMT)
+        days_held = (today - opened).days
+        if days_held >= MAX_HOLD_DAYS:
+            ticker = position["ticker"]
+            current_price = current_prices.get(ticker, float(position["entry_price"]))
+            print(f"MAX HOLD REACHED: {ticker} held {days_held} days — closing")
+            close_position(
+                position["id"],
+                current_price,
+                f"Maximum hold period of {MAX_HOLD_DAYS} days reached"
+            )
+            closed.append(ticker)
+    return closed
+
+def get_portfolio_summary():
+    """
+    Returns a summary string for Claude to use in analysis.
+    """
+    try:
+        open_positions = get_open_positions()
+        closed_positions = get_closed_positions()
+        balance = get_portfolio_balance()
+
+        total_invested = sum(float(p["position_size"]) for p in open_positions)
+        total_pnl = sum(float(p["pnl"]) for p in closed_positions if p["pnl"])
+        total_trades = len(closed_positions)
+        winning_trades = len([p for p in closed_positions if p["pnl"] and float(p["pnl"]) > 0])
+        win_rate = round(winning_trades / total_trades * 100, 1) if total_trades > 0 else 0
+
+        summary = f"""
+PORTFOLIO STATUS:
+Cash balance: £{round(balance, 2)}
+Invested: £{round(total_invested, 2)}
+Total value: £{round(balance + total_invested, 2)}
+Starting balance: £{STARTING_BALANCE}
+Total return: £{round(total_pnl, 2)} ({round((total_pnl / STARTING_BALANCE) * 100, 2)}%)
+Closed trades: {total_trades} ({win_rate}% win rate)
+
+OPEN POSITIONS ({len(open_positions)}/{MAX_POSITIONS}):
+"""
+        if not open_positions:
+            summary += "No open positions.\n"
+        else:
+            tickers = [p["ticker"] for p in open_positions]
+            current_prices = get_current_prices(tickers)
+            for p in open_positions:
+                ticker = p["ticker"]
+                current = current_prices.get(ticker, float(p["entry_price"]))
+                entry = float(p["entry_price"])
+                unrealised_pct = round(((current - entry) / entry) * 100, 2)
+                days_held = (datetime.now(GMT) - datetime.strptime(
+                    p["opened_at"], "%Y-%m-%d %H:%M").replace(tzinfo=GMT)).days
+                summary += f"{ticker}: entry {entry} | current {current} | target {p['target_price']} | stop {p['stop_loss']} | {unrealised_pct}% | day {days_held}/{MAX_HOLD_DAYS} | {p['confidence']}\n"
+
+        return summary
+
+    except Exception as e:
+        print(f"Portfolio summary error: {e}")
+        return "Portfolio data unavailable."

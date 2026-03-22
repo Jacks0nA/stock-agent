@@ -185,12 +185,8 @@ def run_full_analysis(mode="Manual"):
     return analysis, tickers
 
 st.title("AI Stock Market Agent")
-import subprocess
-try:
-    git_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode().strip()
-except Exception:
-    git_hash = "unknown"
-st.caption(f"Build {git_hash} — Manual and Daily modes — Active mode coming when you start trading")
+st.caption("v1.3 — Manual and Daily modes — Active mode coming when you start trading")
+
 st.sidebar.title("Mode")
 mode = st.sidebar.radio(
     "Select mode",
@@ -209,7 +205,7 @@ hours_until = int(time_until.total_seconds() // 3600)
 mins_until = int((time_until.total_seconds() % 3600) // 60)
 st.sidebar.info(f"Next window: {next_window['name']}\n{next_time.strftime('%H:%M GMT')} — in {hours_until}h {mins_until}m")
 
-tab1, tab2 = st.tabs(["Analysis", "Logs"])
+tab1, tab2, tab3 = st.tabs(["Analysis", "Portfolio", "Logs"])
 
 with tab1:
     if mode == "Manual":
@@ -233,8 +229,88 @@ with tab1:
             st.write("The app will auto-run when you open it during a scheduled window.")
             if st.button("Run Manual Check Now", type="secondary"):
                 run_full_analysis(mode="Manual")
-
 with tab2:
+    st.subheader("Paper Trading Portfolio")
+
+    from portfolio import (
+        get_portfolio_balance, get_open_positions, get_closed_positions,
+        get_current_prices, STARTING_BALANCE
+    )
+
+    balance = get_portfolio_balance()
+    open_positions = get_open_positions()
+    closed_positions = get_closed_positions()
+
+    total_invested = sum(float(p["position_size"]) for p in open_positions)
+    total_pnl = sum(float(p["pnl"]) for p in closed_positions if p["pnl"])
+    total_value = balance + total_invested
+    total_return_pct = round(((total_value - STARTING_BALANCE) / STARTING_BALANCE) * 100, 2)
+    total_trades = len(closed_positions)
+    winning_trades = len([p for p in closed_positions if p["pnl"] and float(p["pnl"]) > 0])
+    win_rate = round(winning_trades / total_trades * 100, 1) if total_trades > 0 else 0
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Portfolio Value", f"£{round(total_value, 2)}", f"{total_return_pct}%")
+    col2.metric("Cash Available", f"£{round(balance, 2)}")
+    col3.metric("Invested", f"£{round(total_invested, 2)}")
+    col4.metric("Win Rate", f"{win_rate}%", f"{total_trades} trades")
+
+    st.divider()
+
+    st.subheader(f"Open Positions ({len(open_positions)}/5)")
+    if not open_positions:
+        st.info("No open positions — Claude will open positions when high quality setups appear.")
+    else:
+        tickers = [p["ticker"] for p in open_positions]
+        current_prices = get_current_prices(tickers)
+        for p in open_positions:
+            ticker = p["ticker"]
+            current = current_prices.get(ticker, float(p["entry_price"]))
+            entry = float(p["entry_price"])
+            target = float(p["target_price"])
+            stop = float(p["stop_loss"])
+            size = float(p["position_size"])
+            unrealised_pct = round(((current - entry) / entry) * 100, 2)
+            unrealised_gbp = round(size * (unrealised_pct / 100), 2)
+            colour = "🟢" if unrealised_pct >= 0 else "🔴"
+
+            with st.expander(f"{colour} {ticker} — {unrealised_pct}% (£{unrealised_gbp}) — {p['confidence']}"):
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Entry", f"${entry}")
+                col1.metric("Current", f"${current}")
+                col2.metric("Target", f"${target}")
+                col2.metric("Stop Loss", f"${stop}")
+                col3.metric("Size", f"£{size}")
+                col3.metric("Opened", p["opened_at"])
+                st.caption(f"Reasoning: {p['claude_reasoning']}")
+
+    st.divider()
+
+    st.subheader("Closed Trades")
+    if not closed_positions:
+        st.info("No closed trades yet.")
+    else:
+        total_gain = sum(float(p["pnl"]) for p in closed_positions if p["pnl"] and float(p["pnl"]) > 0)
+        total_loss = sum(float(p["pnl"]) for p in closed_positions if p["pnl"] and float(p["pnl"]) < 0)
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total P&L", f"£{round(total_pnl, 2)}")
+        col2.metric("Total Gains", f"£{round(total_gain, 2)}")
+        col3.metric("Total Losses", f"£{round(total_loss, 2)}")
+
+        for p in closed_positions[:20]:
+            pnl = float(p["pnl"]) if p["pnl"] else 0
+            pnl_pct = float(p["pnl_pct"]) if p["pnl_pct"] else 0
+            colour = "🟢" if pnl >= 0 else "🔴"
+            with st.expander(f"{colour} {p['ticker']} — £{round(pnl, 2)} ({round(pnl_pct, 2)}%) — {p['closed_at']}"):
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Entry", f"${p['entry_price']}")
+                col1.metric("Exit", f"${p['exit_price']}")
+                col2.metric("P&L", f"£{round(pnl, 2)}")
+                col2.metric("Return", f"{round(pnl_pct, 2)}%")
+                col3.metric("Size", f"£{p['position_size']}")
+                col3.metric("Confidence", p["confidence"])
+                st.caption(f"Reasoning: {p['claude_reasoning']}")
+with tab3:
     st.subheader("Analysis Logs")
 
     all_dates = get_all_dates()
