@@ -251,11 +251,48 @@ NEW_TRADE: [TICKER] | [LONG/SHORT] | [ENTRY_PRICE] | [TARGET] | [STOP_LOSS] | [C
 
 If no good setups: NO_TRADE: [REASONING]
 
-PART 3 — ANALYSIS:
-Provide your standard market analysis, key signals, and one-line summary table.
+PART 3 — FORMAT YOUR FULL ANALYSIS IN THIS EXACT ORDER:
+
+### 1. Market Regime
+Single line: BULL or BEAR | SPY price vs 50MA | Risk-on or Risk-off | One sentence overall market tone.
+
+### 2. Portfolio Status
+Current open positions summary, total unrealised P&L, cash available, any stop losses currently at risk.
+
+### 3. Current Position Review
+For each open position: HOLD or EXIT decision, updated target and stop if changed, confidence level, one sentence reasoning.
+
+### 4. News & Sentiment Impact
+What is moving markets today. Which held positions are affected by news. Any sector-wide events. Sentiment direction per ticker.
+
+### 5. New Trade Decisions
+If genuine setups exist, list them with full parameters.
+If no good setups, state NO TRADE TODAY and explain why in one sentence.
+
+### 6. Watchlist Triggers
+For each WATCH signal, state the exact price level or RSI level that would trigger a BUY entry. Format: TICKER — trigger condition — why it matters.
+
+### 7. Risk Exposure Summary
+Total capital at risk across all open positions as percentage of portfolio.
+Flag any sector concentration risk — if 2 or more positions are in the same sector.
+Flag if total risk exceeds 10% of portfolio.
+
+### 8. Key Technical Signals
+RSI extremes, MA crossovers, divergences, volume anomalies. Flagged only — no noise. Max 8 lines.
+
+### 9. Options & Insider Activity
+Any significant flow detected. Divergences vs price. Flag if options contradict technical signal.
+
+### 10. Position Summary Table
+| Ticker | Entry | Current | Target | Stop | P&L | Confidence |
+All open positions in one clean table.
+
+### 11. One-Line Summary
+| Ticker | Direction | Confidence | Reason |
+Every analysed ticker. One line each. No exceptions.
 
 Weight confidence by historical accuracy. Flag options/technical divergences prominently.
-Optimal hold period is 5 days. BUY signals have 91.2% historical accuracy in bull markets."""
+Optimal hold period is 5 days. BUY signals have 80% historical accuracy in bull markets."""
                     }
                 ]
             )
