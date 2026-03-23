@@ -63,6 +63,26 @@ def save_schedule_state(state):
             })
     except Exception as e:
         print(f"Schedule state save error: {e}")
+def get_enhanced_news_setting():
+    try:
+        url = f"{get_base_url()}/rest/v1/portfolio_state?key=eq.enhanced_news"
+        response = httpx.get(url, headers=get_headers())
+        data = response.json()
+        if data:
+            return data[0]["value"] == "true"
+        return False
+    except Exception:
+        return False
+
+def set_enhanced_news_setting(enabled):
+    try:
+        url = f"{get_base_url()}/rest/v1/portfolio_state"
+        httpx.post(url, headers=get_headers(), json={
+            "key": "enhanced_news",
+            "value": "true" if enabled else "false"
+        })
+    except Exception as e:
+        print(f"Enhanced news setting error: {e}")
 
 def get_window_key(window, date=None):
     if date is None:
@@ -180,7 +200,12 @@ def run_full_analysis(mode="Manual", market_is_open=True):
         insider_summary = get_insider_summary(tickers)
 
     with st.spinner("Fetching news..."):
-        news = fetch_stock_news(tickers)
+        if get_enhanced_news_setting():
+            from news_enhanced import fetch_stock_news_enhanced
+            news = fetch_stock_news_enhanced(tickers)
+            st.sidebar.caption("Enhanced news active")
+        else:
+            news = fetch_stock_news(tickers)
 
     if not market_is_open:
         st.info("Markets are currently closed — analysis running but no new positions will be opened.")
@@ -217,7 +242,15 @@ mode = st.sidebar.radio(
 )
 
 st.sidebar.divider()
-
+enhanced_news_enabled = get_enhanced_news_setting()
+enhanced_toggle = st.sidebar.toggle(
+    "Enhanced News",
+    value=enhanced_news_enabled,
+    help="Adds Reuters RSS, article summaries, recency weighting and earnings context. Increases cost by ~4p per analysis."
+)
+if enhanced_toggle != enhanced_news_enabled:
+    set_enhanced_news_setting(enhanced_toggle)
+    st.rerun()
 now_gmt = datetime.now(GMT)
 st.sidebar.caption(f"Current time: {now_gmt.strftime('%H:%M GMT')}")
 

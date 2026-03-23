@@ -68,12 +68,25 @@ def build_news_string(news, max_per_stock=2):
         if not data.get("has_signal") and data.get("avg_score", 0) == 0:
             news_string += f"{ticker}: No significant news\n"
             continue
+
         news_string += f"{ticker} ({data['overall_sentiment']} {data['avg_score']}):\n"
         significant = [h for h in data["headlines"] if abs(h["score"]) > 0.1]
         if not significant:
             significant = data["headlines"][:1]
+
         for h in significant[:max_per_stock]:
-            news_string += f"  {h['sentiment']} ({h['score']}): {h['title'][:100]}\n"
+            age_str = h.get("age_str", "")
+            source = h.get("source", "")
+            summary = h.get("summary", "")
+            news_string += f"  {h['sentiment']} ({h['score']}) [{age_str} — {source}]: {h['title'][:100]}\n"
+            if summary:
+                news_string += f"    {summary[:200]}\n"
+
+        # Add earnings summary if available
+        earnings = data.get("earnings_summary")
+        if earnings:
+            news_string += f"  EARNINGS: {earnings[:200]}\n"
+
     return news_string
 
 def build_options_string(options_summary):
