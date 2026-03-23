@@ -103,7 +103,7 @@ def get_next_window():
     )
     return DAILY_WINDOWS[0], tomorrow
 
-def mark_all_todays_windows_done():
+def mark_window_complete(missed_window):
     state = load_schedule_state()
     today = datetime.now(GMT).strftime("%Y-%m-%d")
     for window in DAILY_WINDOWS:
@@ -258,7 +258,7 @@ with tab1:
             is_weekend_check = now_check.weekday() >= 5
             market_open_flag = not is_weekend_check and market_open_check <= now_check <= market_close_check
             run_full_analysis(mode=f"Daily — {missed_window['name']}", market_is_open=market_open_flag)
-            mark_all_todays_windows_done()
+            mark_window_complete(missed_window)
             st.rerun()
         else:
             st.success("All windows for today are complete or not yet due.")
