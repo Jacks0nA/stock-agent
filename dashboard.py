@@ -250,7 +250,6 @@ enhanced_toggle = st.sidebar.toggle(
 )
 if enhanced_toggle != enhanced_news_enabled:
     set_enhanced_news_setting(enhanced_toggle)
-    st.rerun()
 now_gmt = datetime.now(GMT)
 st.sidebar.caption(f"Current time: {now_gmt.strftime('%H:%M GMT')}")
 
