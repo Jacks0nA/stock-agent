@@ -1,11 +1,18 @@
 import anthropic
 import os
 import time
+import json
 import streamlit as st
 from dotenv import load_dotenv
 from memory import save_analysis, get_memory_summary
 from earnings import get_earnings_summary
 from sectors import get_market_summary
+from portfolio import (
+    get_portfolio_summary, get_open_positions, get_current_prices,
+    open_position, close_position, update_position,
+    check_stop_losses, check_max_hold, get_portfolio_balance,
+    MAX_POSITIONS, CONFIDENCE_SIZES
+)
 
 load_dotenv()
 
@@ -79,7 +86,63 @@ def build_options_string(options_summary):
             result += f"  {flow['signal']} {flow['type']} ${flow['strike']} exp {flow['expiry']} vol {flow['volume']:,}\n"
     return result
 
-def analyse_stocks(df, news, historical, earnings, market_context, insider_summary=None, options_summary=None):
+def determine_confidence_level(ticker, score, historical, options_summary, insider_summary):
+    """
+    Determines confidence tier based on score, confirmers, insider and options data.
+    Returns LOW, MEDIUM, CONFIDENT, or SUPER.
+    """
+    strong_confirmers = 0
+    has_insider = ticker in insider_summary if insider_summary else False
+    has_options = ticker in options_summary if options_summary else False
+
+    if historical.get(ticker):
+        rsi = historical[ticker].get("rsi")
+        if rsi and rsi < 35:
+            strong_confirmers += 1
+
+    if score >= 14 and strong_confirmers >= 2 and has_insider and has_options:
+        return "SUPER"
+    elif score >= 11 and strong_confirmers >= 1 and (has_insider or has_options):
+        return "CONFIDENT"
+    elif score >= 9 and (has_insider or has_options):
+        return "MEDIUM"
+    else:
+        return "LOW"
+
+def review_open_positions(current_prices, news, options_summary, market_context):
+    """
+    Reviews all open positions and returns Claude's decisions on each.
+    """
+    open_positions = get_open_positions()
+    if not open_positions:
+        return "", []
+
+    position_reviews = ""
+    for p in open_positions:
+        ticker = p["ticker"]
+        current = current_prices.get(ticker, float(p["entry_price"]))
+        entry = float(p["entry_price"])
+        pnl_pct = round(((current - entry) / entry) * 100, 2)
+        days_held = (
+            __import__("datetime").datetime.now(__import__("datetime").timezone.utc) -
+            __import__("datetime").datetime.strptime(p["opened_at"], "%Y-%m-%d %H:%M").replace(
+                tzinfo=__import__("datetime").timezone.utc)
+        ).days
+
+        ticker_news = news.get(ticker, {})
+        news_summary = ticker_news.get("overall_sentiment", "No news")
+
+        position_reviews += f"""
+{ticker}: entry {entry} | current {current} | pnl {pnl_pct}% | target {p['target_price']} | stop {p['stop_loss']} | day {days_held}/{10} | confidence {p['confidence']}
+News: {news_summary}
+Original reasoning: {p['claude_reasoning'][:200] if p['claude_reasoning'] else 'N/A'}
+"""
+
+    return position_reviews, open_positions
+
+def analyse_stocks(df, news, historical, earnings, market_context,
+                   insider_summary=None, options_summary=None, market_is_open=True):
+
     data_string = df.to_string(index=False)
     tickers = df["ticker"].tolist()
 
@@ -100,6 +163,28 @@ def analyse_stocks(df, news, historical, earnings, market_context, insider_summa
     accuracy_context = get_accuracy_context(tickers)
     news_string = build_news_string(news)
     options_string = build_options_string(options_summary)
+    portfolio_summary = get_portfolio_summary()
+
+    # Check stop losses and max hold before analysis
+    open_positions = get_open_positions()
+    if open_positions:
+        position_tickers = [p["ticker"] for p in open_positions]
+        all_tickers = list(set(tickers + position_tickers))
+        current_prices = get_current_prices(all_tickers)
+        check_stop_losses(open_positions, current_prices)
+        check_max_hold(open_positions, current_prices)
+        # Refresh after auto-closures
+        open_positions = get_open_positions()
+    else:
+        current_prices = get_current_prices(tickers)
+
+    # Get position reviews for Claude
+    position_reviews, open_positions = review_open_positions(
+        current_prices, news, options_summary, market_context
+    )
+
+    available_slots = MAX_POSITIONS - len(open_positions)
+    balance = get_portfolio_balance()
 
     for attempt in range(3):
         try:
@@ -109,9 +194,14 @@ def analyse_stocks(df, news, historical, earnings, market_context, insider_summa
                 messages=[
                     {
                         "role": "user",
-                        "content": f"""Professional stock analyst. Be concise and direct.
+                        "content": f"""You are a professional stock analyst managing a paper trading portfolio.
 
 MARKET: {market_summary}
+
+PORTFOLIO: {portfolio_summary}
+
+OPEN POSITION REVIEW:
+{position_reviews if position_reviews else "No open positions to review."}
 
 ACCURACY: {accuracy_context}
 
@@ -129,27 +219,56 @@ INSIDER: {insider_string}
 
 EARNINGS: {earnings_summary}
 
-Provide:
-1. Market context (2 lines max)
-2. Key RSI/MA signals (flagged only)
-3. Options flow vs price divergences
-4. Session comparison (what changed)
+INSTRUCTIONS:
 
-Then:
-🟢 BUY: only if a genuinely high quality setup exists — ticker, why, LONG/SHORT, hold time, entry, target, stop, R:R, confidence. If no strong setup exists, say "NO TRADE TODAY" and explain why.
-🔴 AVOID: only flag if options flow or insider data strongly confirms bearish case — not from technicals alone
-⚪ WATCH: ticker, specific trigger
+PART 1 — REVIEW OPEN POSITIONS:
+For each open position review whether to HOLD or EXIT.
+Rules you must follow:
+- Stop loss NEVER moves down
+- When target is hit, move stop loss up to just below target achieved
+- Exit if confidence drops to LOW
+- Exit if stop loss breached (already handled automatically)
+- Maximum 10 days hold (already handled automatically)
 
-It is always better to say NO TRADE TODAY than to force a low quality setup. Capital preservation is the priority. Only recommend a BUY if you would genuinely be confident putting your own money in.
+For each open position output:
+POSITION_REVIEW: [TICKER] | [HOLD/EXIT] | [NEW_TARGET if changed] | [NEW_STOP if changed] | [NEW_CONFIDENCE] | [REASONING]
 
-One line per stock: direction | confidence | reason
+PART 2 — NEW TRADE DECISIONS:
+Available portfolio slots: {available_slots}
+Available cash: £{round(balance, 2)}
 
-Weight confidence by historical accuracy. Flag options/technical divergences prominently."""
+Confidence tiers and position sizes:
+- SUPER (£2000): score 14+, all three strong confirmers, both insider AND options flow, high accuracy asset
+- CONFIDENT (£1000): score 11-13, two strong confirmers, insider OR options flow, high accuracy asset
+- MEDIUM (£250): score 9-10, one strong confirmer, insider OR options
+- LOW (£100): score 7-8, one confirmer, no insider/options
+
+Only open a position if you genuinely believe in the setup.
+It is always better to say NO TRADE than to force a low quality setup.
+
+For each new trade output:
+NEW_TRADE: [TICKER] | [LONG/SHORT] | [ENTRY_PRICE] | [TARGET] | [STOP_LOSS] | [CONFIDENCE] | [REASONING]
+
+If no good setups: NO_TRADE: [REASONING]
+
+PART 3 — ANALYSIS:
+Provide your standard market analysis, key signals, and one-line summary table.
+
+Weight confidence by historical accuracy. Flag options/technical divergences prominently.
+Optimal hold period is 5 days. BUY signals have 91.2% historical accuracy in bull markets."""
                     }
                 ]
             )
 
             analysis_text = message.content[0].text
+
+            # Parse and execute trade decisions
+            execute_trade_decisions(
+                analysis_text, historical, options_summary,
+                insider_summary, current_prices, open_positions,
+                market_is_open=market_is_open
+            )
+
             save_analysis(tickers, analysis_text, historical)
             return analysis_text
 
@@ -159,3 +278,89 @@ Weight confidence by historical accuracy. Flag options/technical divergences pro
                 time.sleep(10)
             else:
                 return "Claude is currently overloaded. Please wait a moment and refresh."
+
+def execute_trade_decisions(analysis_text, historical, options_summary,
+                             insider_summary, current_prices, open_positions,
+                             market_is_open=True):
+    """
+    Parses Claude's structured output and executes position opens/updates/closes.
+    """
+    lines = analysis_text.split("\n")
+
+    open_position_map = {p["ticker"]: p for p in open_positions}
+
+    for line in lines:
+        line = line.strip()
+
+        # Handle position reviews
+        if line.startswith("POSITION_REVIEW:"):
+            try:
+                parts = line.replace("POSITION_REVIEW:", "").strip().split("|")
+                ticker = parts[0].strip()
+                action = parts[1].strip()
+                new_target = parts[2].strip() if len(parts) > 2 else None
+                new_stop = parts[3].strip() if len(parts) > 3 else None
+                new_confidence = parts[4].strip() if len(parts) > 4 else None
+                reasoning = parts[5].strip() if len(parts) > 5 else ""
+
+                if ticker in open_position_map:
+                    position = open_position_map[ticker]
+                    current_price = current_prices.get(ticker, float(position["entry_price"]))
+
+                    if action == "EXIT":
+                        close_position(position["id"], current_price, reasoning)
+                    else:
+                        updates = {}
+                        if new_target and new_target not in ["", "unchanged"]:
+                            try:
+                                updates["target_price"] = float(new_target)
+                            except ValueError:
+                                pass
+                        if new_stop and new_stop not in ["", "unchanged"]:
+                            try:
+                                updates["stop_loss"] = float(new_stop)
+                            except ValueError:
+                                pass
+                        if new_confidence and new_confidence not in ["", "unchanged"]:
+                            updates["confidence"] = new_confidence
+                        updates["current_price"] = current_price
+                        if updates:
+                            update_position(position["id"], updates)
+
+            except Exception as e:
+                print(f"Position review parse error: {e}")
+
+        # Handle new trades
+        elif line.startswith("NEW_TRADE:"):
+            if not market_is_open:
+                print(f"US market closed — new position not opened: {line}")
+                continue
+            try:
+                parts = line.replace("NEW_TRADE:", "").strip().split("|")
+                ticker = parts[0].strip()
+                direction = parts[1].strip()
+                entry_price = float(parts[2].strip())
+                target = float(parts[3].strip())
+                stop_loss = float(parts[4].strip())
+                confidence = parts[5].strip()
+                reasoning = parts[6].strip() if len(parts) > 6 else ""
+
+                position_size = CONFIDENCE_SIZES.get(confidence, 100.0)
+                balance = get_portfolio_balance()
+                current_open = len(get_open_positions())
+
+                if current_open >= MAX_POSITIONS:
+                    print(f"Max positions reached — skipping {ticker}")
+                    continue
+
+                if position_size > balance:
+                    print(f"Insufficient balance for {ticker} — skipping")
+                    continue
+
+                open_position(
+                    ticker, direction, entry_price, target,
+                    stop_loss, confidence, 0, reasoning, position_size
+                )
+
+            except Exception as e:
+                print(f"New trade parse error: {e}")
