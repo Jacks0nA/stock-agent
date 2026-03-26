@@ -11,6 +11,8 @@ from insider import get_insider_summary
 from earnings import get_earnings_calendar, get_earnings_summary
 from sectors import get_market_context, get_market_summary
 from prediction_tracker import save_prediction, get_accuracy_summary
+from agent import execute_trade_decisions
+from portfolio import get_open_positions, get_current_prices
 
 load_dotenv()
 
@@ -28,7 +30,7 @@ def _build_options_string(options_summary):
     return result
 
 
-def run_deep_dive(ticker: str, use_enhanced_news: bool = False) -> str:
+def run_deep_dive(ticker: str, use_enhanced_news: bool = False, market_is_open: bool = True) -> str:
     ticker = ticker.strip().upper()
 
     with st.spinner(f"Fetching price data for {ticker}..."):
@@ -205,7 +207,16 @@ Three concrete reasons to AVOID with specific downside levels and risks.
 **Confidence Level:** [LOW / MEDIUM / CONFIDENT / SUPER]
 **Time Horizon:** [days/weeks]
 
-Final paragraph: 3-5 sentences synthesising the bull and bear cases into your overall conclusion. Be direct and specific. Do not hedge excessively."""
+Final paragraph: 3-5 sentences synthesising the bull and bear cases into your overall conclusion. Be direct and specific. Do not hedge excessively.
+
+---
+
+TRADE EXECUTION: If and only if your verdict is BUY, output this line at the very end on its own line (use exact numeric values, no $ sign in the numbers):
+NEW_TRADE: {ticker} | LONG | [entry_price] | [target_price] | [stop_loss] | [confidence] | [one sentence reasoning]
+
+Example: NEW_TRADE: AAPL | LONG | 182.50 | 195.00 | 176.00 | MEDIUM | Breaking above MA20 with bullish MACD and analyst target 8% above current price.
+
+If your verdict is WATCH or AVOID, do not output a NEW_TRADE line."""
                         }
                     ]
                 )
@@ -226,6 +237,18 @@ Final paragraph: 3-5 sentences synthesising the bull and bear cases into your ov
                         )
                     except Exception:
                         pass
+
+                # Execute trade if market is open — same logic as daily analysis
+                price_row = df[df["ticker"] == ticker]
+                current_price = float(price_row.iloc[0]["price"]) if not price_row.empty else None
+                current_prices = {ticker: current_price} if current_price else {}
+                open_positions = get_open_positions()
+
+                execute_trade_decisions(
+                    result, historical, options_summary,
+                    insider_summary, current_prices, open_positions,
+                    market_is_open=market_is_open,
+                )
 
                 return result
 

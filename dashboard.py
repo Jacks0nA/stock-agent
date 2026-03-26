@@ -465,11 +465,26 @@ with tab4:
         deep_dive_run = st.button("Analyse", type="primary", use_container_width=True)
 
     if deep_dive_run and deep_dive_ticker.strip():
+        now_dd = datetime.now(GMT)
+        market_open_dd = now_dd.replace(hour=13, minute=30, second=0, microsecond=0)
+        market_close_dd = now_dd.replace(hour=20, minute=0, second=0, microsecond=0)
+        is_weekend_dd = now_dd.weekday() >= 5
+        market_open_flag_dd = not is_weekend_dd and market_open_dd <= now_dd <= market_close_dd
+
+        if not market_open_flag_dd:
+            st.info("US markets are currently closed — analysis will run but no position will be opened.")
+
         result = run_deep_dive(
             deep_dive_ticker.strip(),
-            use_enhanced_news=get_enhanced_news_setting()
+            use_enhanced_news=get_enhanced_news_setting(),
+            market_is_open=market_open_flag_dd,
         )
         st.divider()
         st.markdown(result)
+
+        if market_open_flag_dd and "NEW_TRADE:" in result:
+            st.success("Position opened — check the Portfolio tab.")
+        elif market_open_flag_dd:
+            st.info("No position opened — verdict was WATCH or AVOID.")
     elif deep_dive_run:
         st.warning("Please enter a ticker symbol.")
