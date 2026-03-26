@@ -102,7 +102,11 @@ def open_position(ticker, direction, entry_price, target_price, stop_loss,
         }
         response = httpx.post(url, headers=get_headers(), json=data)
 
-        # Deduct from balance
+        if response.status_code not in (200, 201):
+            print(f"Supabase rejected position insert for {ticker}: {response.status_code} {response.text}")
+            return None
+
+        # Deduct from balance only after confirmed insert
         new_balance = balance - position_size
         url2 = f"{get_base_url()}/rest/v1/portfolio_state"
         httpx.post(url2, headers=get_headers(), json={
@@ -111,7 +115,7 @@ def open_position(ticker, direction, entry_price, target_price, stop_loss,
         })
 
         print(f"Opened {direction} position in {ticker} — size £{position_size} — confidence {confidence}")
-        return response.json()
+        return True
 
     except Exception as e:
         print(f"Open position error: {e}")
