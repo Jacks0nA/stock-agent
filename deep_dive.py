@@ -5,7 +5,7 @@ import streamlit as st
 from dotenv import load_dotenv
 from fetcher import fetch_stock_data, fetch_historical_data
 from news import fetch_stock_news
-from options import get_options_summary, build_options_string
+from options import get_options_summary
 from insider import get_insider_summary
 from earnings import get_earnings_calendar, get_earnings_summary
 from sectors import get_market_context, get_market_summary
