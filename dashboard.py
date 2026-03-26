@@ -13,6 +13,7 @@ from screener import run_screen
 from insider import get_insider_summary
 from options import get_options_summary
 from logger import save_daily_log, get_all_dates, get_log_for_date_window, read_log_file, delete_date_logs
+from deep_dive import run_deep_dive
 from portfolio import (
     get_portfolio_balance, get_open_positions, get_closed_positions,
     get_current_prices, STARTING_BALANCE
@@ -259,7 +260,7 @@ hours_until = int(time_until.total_seconds() // 3600)
 mins_until = int((time_until.total_seconds() % 3600) // 60)
 st.sidebar.info(f"Next window: {next_window['name']}\n{next_time.strftime('%H:%M GMT')} — in {hours_until}h {mins_until}m")
 
-tab1, tab2, tab3 = st.tabs(["Analysis", "Portfolio", "Logs"])
+tab1, tab2, tab3, tab4 = st.tabs(["Analysis", "Portfolio", "Logs", "Deep Dive"])
 
 with tab1:
     if mode == "Manual":
@@ -435,3 +436,27 @@ with tab3:
                     st.caption("No manual analyses run on this date.")
 
             st.divider()
+
+with tab4:
+    st.subheader("Deep Dive — Single Stock Analysis")
+    st.caption("Enter any ticker to get a full investment thesis from Claude: technicals, news, options, insider activity, earnings, and a BUY/WATCH/AVOID verdict.")
+
+    col_input, col_button = st.columns([3, 1])
+    with col_input:
+        deep_dive_ticker = st.text_input(
+            "Ticker",
+            placeholder="e.g. AAPL, NVDA, TSLA",
+            label_visibility="collapsed"
+        )
+    with col_button:
+        deep_dive_run = st.button("Analyse", type="primary", use_container_width=True)
+
+    if deep_dive_run and deep_dive_ticker.strip():
+        result = run_deep_dive(
+            deep_dive_ticker.strip(),
+            use_enhanced_news=get_enhanced_news_setting()
+        )
+        st.divider()
+        st.markdown(result)
+    elif deep_dive_run:
+        st.warning("Please enter a ticker symbol.")
