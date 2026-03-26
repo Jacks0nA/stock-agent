@@ -14,6 +14,8 @@ from portfolio import (
     MAX_POSITIONS, CONFIDENCE_SIZES
 )
 
+from prediction_tracker import get_accuracy_summary
+
 load_dotenv()
 
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -89,6 +91,29 @@ def build_news_string(news, max_per_stock=2):
 
     return news_string
 
+def build_fundamentals_string(fundamentals):
+    if not fundamentals:
+        return "Fundamental data unavailable.\n"
+    result = ""
+    for ticker, d in fundamentals.items():
+        if not d:
+            continue
+        parts = []
+        if d.get("pe"):
+            parts.append(f"PE {d['pe']}")
+        if d.get("fwd_pe"):
+            parts.append(f"FwdPE {d['fwd_pe']}")
+        if d.get("analyst_target") and d.get("target_upside") is not None:
+            parts.append(f"target ${d['analyst_target']} ({d['target_upside']:+.1f}%)")
+        if d.get("short_pct") is not None:
+            parts.append(f"short {d['short_pct']}%")
+        if d.get("rev_growth") is not None:
+            parts.append(f"revGrowth {d['rev_growth']:+.1f}%")
+        if parts:
+            result += f"{ticker}: {' | '.join(parts)}\n"
+    return result if result else "No fundamental data available.\n"
+
+
 def build_options_string(options_summary):
     if not options_summary:
         return "No significant options activity.\n"
@@ -154,7 +179,8 @@ Original reasoning: {p['claude_reasoning'][:200] if p['claude_reasoning'] else '
     return position_reviews, open_positions
 
 def analyse_stocks(df, news, historical, earnings, market_context,
-                   insider_summary=None, options_summary=None, market_is_open=True):
+                   insider_summary=None, options_summary=None, market_is_open=True,
+                   fundamentals=None):
 
     data_string = df.to_string(index=False)
     tickers = df["ticker"].tolist()
@@ -162,7 +188,11 @@ def analyse_stocks(df, news, historical, earnings, market_context,
     historical_string = ""
     for ticker, data in historical.items():
         if data:
-            historical_string += f"{ticker}: RSI {data.get('rsi','N/A')} ({data.get('rsi_signal','N/A')}) | {data.get('ma_signal','N/A')} | {data.get('trend','N/A')} | Vol {data.get('volume_signal','N/A')}\n"
+            historical_string += (
+                f"{ticker}: RSI {data.get('rsi','N/A')} ({data.get('rsi_signal','N/A')}) | "
+                f"{data.get('ma_signal','N/A')} | MACD {data.get('macd_signal','N/A')} | "
+                f"BB {data.get('bb_signal','N/A')} | {data.get('trend','N/A')} | Vol {data.get('volume_signal','N/A')}\n"
+            )
 
     insider_string = "None detected.\n"
     if insider_summary:
@@ -174,8 +204,10 @@ def analyse_stocks(df, news, historical, earnings, market_context,
     earnings_summary = get_earnings_summary(earnings)
     market_summary = get_market_summary(market_context)
     accuracy_context = get_accuracy_context(tickers)
+    prediction_accuracy = get_accuracy_summary()
     news_string = build_news_string(news)
     options_string = build_options_string(options_summary)
+    fundamentals_string = build_fundamentals_string(fundamentals)
     portfolio_summary = get_portfolio_summary()
 
     # Check stop losses and max hold before analysis
@@ -218,7 +250,13 @@ OPEN POSITION REVIEW:
 
 ACCURACY: {accuracy_context}
 
+PREDICTION HISTORY:
+{prediction_accuracy}
+
 MEMORY: {memory_summary}
+
+FUNDAMENTALS:
+{fundamentals_string}
 
 PRICES & TECHNICALS:
 {data_string}

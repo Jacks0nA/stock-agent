@@ -1,14 +1,16 @@
 import anthropic
 import os
+import re
 import time
 import streamlit as st
 from dotenv import load_dotenv
-from fetcher import fetch_stock_data, fetch_historical_data
+from fetcher import fetch_stock_data, fetch_historical_data, fetch_fundamentals
 from news import fetch_stock_news
 from options import get_options_summary
 from insider import get_insider_summary
 from earnings import get_earnings_calendar, get_earnings_summary
 from sectors import get_market_context, get_market_summary
+from prediction_tracker import save_prediction, get_accuracy_summary
 
 load_dotenv()
 
@@ -32,6 +34,9 @@ def run_deep_dive(ticker: str, use_enhanced_news: bool = False) -> str:
     with st.spinner(f"Fetching price data for {ticker}..."):
         df = fetch_stock_data([ticker])
         historical = fetch_historical_data([ticker])
+
+    with st.spinner("Fetching fundamentals..."):
+        fundamentals = fetch_fundamentals([ticker])
 
     with st.spinner("Fetching market context..."):
         market_context = get_market_context()
@@ -67,13 +72,32 @@ def run_deep_dive(ticker: str, use_enhanced_news: bool = False) -> str:
         technical_string = (
             f"RSI: {hist.get('rsi', 'N/A')} ({hist.get('rsi_signal', 'N/A')})\n"
             f"MA20: {hist.get('ma20', 'N/A')} | MA50: {hist.get('ma50', 'N/A')}\n"
-            f"Signal: {hist.get('ma_signal', 'N/A')}\n"
+            f"MA Signal: {hist.get('ma_signal', 'N/A')}\n"
+            f"MACD: {hist.get('macd_signal', 'N/A')}\n"
+            f"Bollinger Bands: {hist.get('bb_signal', 'N/A')}\n"
             f"Trend: {hist.get('trend', 'N/A')}\n"
             f"Volume: {hist.get('volume_signal', 'N/A')}\n"
             f"30d High: {hist.get('high_30d', 'N/A')} | 30d Low: {hist.get('low_30d', 'N/A')} | 30d Avg: {hist.get('avg_30d', 'N/A')}"
         )
     else:
         technical_string = "Technical data unavailable."
+
+    fund = fundamentals.get(ticker, {})
+    if fund:
+        fund_parts = []
+        if fund.get("pe"):
+            fund_parts.append(f"P/E: {fund['pe']}")
+        if fund.get("fwd_pe"):
+            fund_parts.append(f"Forward P/E: {fund['fwd_pe']}")
+        if fund.get("analyst_target") and fund.get("target_upside") is not None:
+            fund_parts.append(f"Analyst target: ${fund['analyst_target']} ({fund['target_upside']:+.1f}%)")
+        if fund.get("short_pct") is not None:
+            fund_parts.append(f"Short interest: {fund['short_pct']}% of float")
+        if fund.get("rev_growth") is not None:
+            fund_parts.append(f"Revenue growth YoY: {fund['rev_growth']:+.1f}%")
+        fundamentals_string = "\n".join(fund_parts) if fund_parts else "Fundamental data unavailable."
+    else:
+        fundamentals_string = "Fundamental data unavailable."
 
     ticker_news = news.get(ticker, {})
     headlines = ticker_news.get("headlines", [])
@@ -95,6 +119,7 @@ def run_deep_dive(ticker: str, use_enhanced_news: bool = False) -> str:
 
     earnings_summary = get_earnings_summary(earnings)
     market_summary = get_market_summary(market_context)
+    prediction_accuracy = get_accuracy_summary()
 
     with st.spinner(f"Claude running deep dive on {ticker}..."):
         for attempt in range(3):
@@ -112,6 +137,9 @@ STOCK: {ticker}
 MARKET CONTEXT:
 {market_summary}
 
+FUNDAMENTALS:
+{fundamentals_string}
+
 PRICE & TECHNICALS:
 {price_string}
 {technical_string}
@@ -127,6 +155,9 @@ INSIDER ACTIVITY:
 
 EARNINGS:
 {earnings_summary}
+
+YOUR PAST PREDICTION ACCURACY:
+{prediction_accuracy}
 
 ---
 
@@ -176,7 +207,25 @@ Final paragraph: 3-5 sentences synthesising the bull and bear cases into your ov
                         }
                     ]
                 )
-                return message.content[0].text
+                result = message.content[0].text
+
+                # Parse verdict and save for accuracy tracking
+                verdict_match = re.search(r'\*\*VERDICT:\s*(BUY|WATCH|AVOID)', result)
+                entry_match = re.search(r'\*\*Entry Price:\*\*\s*\$([0-9,.]+)', result)
+                conf_match = re.search(r'\*\*Confidence Level:\*\*\s*(LOW|MEDIUM|CONFIDENT|SUPER)', result)
+                if verdict_match and entry_match:
+                    try:
+                        save_prediction(
+                            ticker=ticker,
+                            verdict=verdict_match.group(1),
+                            entry_price=float(entry_match.group(1).replace(",", "")),
+                            confidence=conf_match.group(1) if conf_match else "MEDIUM",
+                            source="deep_dive",
+                        )
+                    except Exception:
+                        pass
+
+                return result
 
             except anthropic.APIStatusError:
                 if attempt < 2:
