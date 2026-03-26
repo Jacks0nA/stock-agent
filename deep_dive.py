@@ -70,11 +70,13 @@ def run_deep_dive(ticker: str, use_enhanced_news: bool = False) -> str:
     hist = historical.get(ticker, {})
     if hist:
         technical_string = (
-            f"RSI: {hist.get('rsi', 'N/A')} ({hist.get('rsi_signal', 'N/A')})\n"
+            f"RSI (daily): {hist.get('rsi', 'N/A')} ({hist.get('rsi_signal', 'N/A')})\n"
+            f"RSI (weekly): {hist.get('weekly_rsi_signal', 'N/A')}\n"
             f"MA20: {hist.get('ma20', 'N/A')} | MA50: {hist.get('ma50', 'N/A')}\n"
             f"MA Signal: {hist.get('ma_signal', 'N/A')}\n"
             f"MACD: {hist.get('macd_signal', 'N/A')}\n"
             f"Bollinger Bands: {hist.get('bb_signal', 'N/A')}\n"
+            f"Sector Relative Strength: {hist.get('sector_signal', 'N/A')}\n"
             f"Trend: {hist.get('trend', 'N/A')}\n"
             f"Volume: {hist.get('volume_signal', 'N/A')}\n"
             f"30d High: {hist.get('high_30d', 'N/A')} | 30d Low: {hist.get('low_30d', 'N/A')} | 30d Avg: {hist.get('avg_30d', 'N/A')}"

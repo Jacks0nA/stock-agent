@@ -188,11 +188,15 @@ def analyse_stocks(df, news, historical, earnings, market_context,
     historical_string = ""
     for ticker, data in historical.items():
         if data:
-            historical_string += (
+            line = (
                 f"{ticker}: RSI {data.get('rsi','N/A')} ({data.get('rsi_signal','N/A')}) | "
+                f"{data.get('weekly_rsi_signal','N/A')} | "
                 f"{data.get('ma_signal','N/A')} | MACD {data.get('macd_signal','N/A')} | "
-                f"BB {data.get('bb_signal','N/A')} | {data.get('trend','N/A')} | Vol {data.get('volume_signal','N/A')}\n"
+                f"BB {data.get('bb_signal','N/A')} | {data.get('trend','N/A')} | Vol {data.get('volume_signal','N/A')}"
             )
+            if data.get("sector_signal"):
+                line += f" | Sector: {data['sector_signal']}"
+            historical_string += line + "\n"
 
     insider_string = "None detected.\n"
     if insider_summary:

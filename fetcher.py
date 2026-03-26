@@ -2,6 +2,34 @@ import yfinance as yf
 import pandas as pd
 import math
 
+# Sector ETF map — mirrors screener.py's SECTOR_ETFS (kept here to avoid circular import)
+SECTOR_ETF_MAP = {
+    "AAPL": "XLK", "GOOGL": "XLK", "NVDA": "XLK", "MSFT": "XLK",
+    "META": "XLK", "TSLA": "XLK", "INTC": "XLK", "CRM": "XLK",
+    "NFLX": "XLK", "PYPL": "XLK", "UBER": "XLK", "SNAP": "XLK",
+    "SPOT": "XLK", "SHOP": "XLK", "PLTR": "XLK", "RBLX": "XLK",
+    "NET": "XLK", "ZM": "XLK", "DOCU": "XLK", "TWLO": "XLK",
+    "MDB": "XLK", "OKTA": "XLK", "AMD": "XLK",
+    "JPM": "XLF", "BAC": "XLF", "GS": "XLF", "MS": "XLF",
+    "V": "XLF", "AXP": "XLF", "WFC": "XLF", "BLK": "XLF",
+    "SCHW": "XLF", "BK": "XLF", "COF": "XLF", "USB": "XLF",
+    "CFG": "XLF", "C": "XLF", "RF": "XLF",
+    "PFE": "XLV", "MRK": "XLV", "ABBV": "XLV", "ABT": "XLV",
+    "DHR": "XLV", "VRTX": "XLV", "SYK": "XLV", "MDT": "XLV",
+    "AMGN": "XLV", "GILD": "XLV", "BIIB": "XLV", "BMY": "XLV",
+    "UNH": "XLV", "TMO": "XLV",
+    "COP": "XLE", "EOG": "XLE", "MPC": "XLE", "VLO": "XLE",
+    "PSX": "XLE", "OXY": "XLE", "HAL": "XLE", "APA": "XLE",
+    "BKR": "XLE", "OVV": "XLE", "SM": "XLE", "DVN": "XLE", "FANG": "XLE",
+    "MCD": "XLY", "SBUX": "XLY", "NKE": "XLY", "ROST": "XLY",
+    "DLTR": "XLY", "YUM": "XLY", "DPZ": "XLY", "QSR": "XLY", "TJX": "XLY",
+    "WMT": "XLP", "PEP": "XLP", "DG": "XLP",
+    "CAT": "XLI", "DE": "XLI", "HON": "XLI", "MMM": "XLI",
+    "FDX": "XLI", "NOC": "XLI", "GD": "XLI", "EMR": "XLI",
+    "PH": "XLI", "ROK": "XLI", "DOV": "XLI", "XYL": "XLI",
+    "AME": "XLI", "RTX": "XLI", "GE": "XLI",
+}
+
 def calculate_rsi(closes, period=14):
     delta = closes.diff()
     gains = delta.where(delta > 0, 0)
@@ -52,6 +80,20 @@ def fetch_stock_data(tickers):
     return pd.DataFrame(data)
 
 def fetch_historical_data(tickers):
+    # Pre-fetch unique sector ETFs once (4-6 calls for 15 tickers, not per-ticker)
+    _etfs_needed = set()
+    for t in tickers:
+        if "-USD" not in t and "=F" not in t:
+            _etfs_needed.add(SECTOR_ETF_MAP.get(t, "SPY"))
+    _etf_closes = {}
+    for etf in _etfs_needed:
+        try:
+            h = yf.Ticker(etf).history(period="1mo")
+            h.index = h.index.tz_localize(None)
+            _etf_closes[etf] = h["Close"]
+        except Exception:
+            pass
+
     historical = {}
     for ticker in tickers:
         try:
@@ -84,6 +126,20 @@ def fetch_historical_data(tickers):
                             "Below both MAs — bearish" if current < ma20 and current < ma50 else \
                             "Mixed signals"
 
+            # Weekly RSI — resampled from daily data, no extra API call
+            weekly_closes = closes.resample("W").last().dropna()
+            if len(weekly_closes) >= 15:
+                weekly_rsi = calculate_rsi(weekly_closes)
+                if weekly_rsi > 70:
+                    weekly_rsi_signal = f"Overbought weekly ({weekly_rsi})"
+                elif weekly_rsi < 30:
+                    weekly_rsi_signal = f"Oversold weekly ({weekly_rsi})"
+                else:
+                    weekly_rsi_signal = f"Neutral weekly ({weekly_rsi})"
+            else:
+                weekly_rsi = None
+                weekly_rsi_signal = "Insufficient weekly data"
+
             # MACD (12/26/9)
             ema12 = closes.ewm(span=12, adjust=False).mean()
             ema26 = closes.ewm(span=26, adjust=False).mean()
@@ -95,6 +151,22 @@ def fetch_historical_data(tickers):
                 macd_signal = "Bullish" if hist_now > hist_prev else "Bullish weakening"
             else:
                 macd_signal = "Bearish" if hist_now < hist_prev else "Bearish recovering"
+
+            # Sector relative strength (5-day price return vs sector ETF)
+            sector_signal = None
+            if "-USD" not in ticker and "=F" not in ticker:
+                etf = SECTOR_ETF_MAP.get(ticker, "SPY")
+                etf_cls = _etf_closes.get(etf)
+                if etf_cls is not None and len(closes) >= 6 and len(etf_cls) >= 6:
+                    ticker_5d = ((closes.iloc[-1] - closes.iloc[-6]) / closes.iloc[-6]) * 100
+                    etf_5d = ((etf_cls.iloc[-1] - etf_cls.iloc[-6]) / etf_cls.iloc[-6]) * 100
+                    rel = round(ticker_5d - etf_5d, 2)
+                    if rel > 1:
+                        sector_signal = f"Outperforming {etf} by +{rel}% (5d)"
+                    elif rel < -1:
+                        sector_signal = f"Underperforming {etf} by {rel}% (5d)"
+                    else:
+                        sector_signal = f"In-line with {etf} ({rel:+.1f}%, 5d)"
 
             # Bollinger Bands %B
             bb_mid = closes.rolling(20).mean()
@@ -123,6 +195,8 @@ def fetch_historical_data(tickers):
                 "volume_signal": volume_signal,
                 "macd_signal": macd_signal,
                 "bb_signal": bb_signal,
+                "weekly_rsi_signal": weekly_rsi_signal,
+                "sector_signal": sector_signal,
             }
         
         except Exception as e:
