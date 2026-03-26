@@ -401,6 +401,7 @@ def execute_trade_decisions(analysis_text, historical, options_summary,
 
                     if action == "EXIT":
                         close_position(position["id"], current_price, reasoning)
+                        st.info(f"Closed {ticker} at ${current_price} — {reasoning[:80]}")
                     else:
                         updates = {}
                         if new_target and new_target not in ["", "unchanged"]:
@@ -420,12 +421,12 @@ def execute_trade_decisions(analysis_text, historical, options_summary,
                             update_position(position["id"], updates)
 
             except Exception as e:
-                print(f"Position review parse error: {e}")
+                st.error(f"Position review parse error: {e}")
 
         # Handle new trades
         elif line.startswith("NEW_TRADE:"):
             if not market_is_open:
-                print(f"US market closed — new position not opened: {line}")
+                st.info(f"Markets closed — trade not opened. It will not be retried automatically.")
                 continue
             try:
                 parts = line.replace("NEW_TRADE:", "").strip().split("|")
@@ -442,17 +443,21 @@ def execute_trade_decisions(analysis_text, historical, options_summary,
                 current_open = len(get_open_positions())
 
                 if current_open >= MAX_POSITIONS:
-                    print(f"Max positions reached — skipping {ticker}")
+                    st.warning(f"Max positions ({MAX_POSITIONS}) reached — {ticker} skipped.")
                     continue
 
                 if position_size > balance:
-                    print(f"Insufficient balance for {ticker} — skipping")
+                    st.warning(f"Insufficient balance for {ticker} — need £{position_size}, have £{round(balance, 2)}.")
                     continue
 
-                open_position(
+                result = open_position(
                     ticker, direction, entry_price, target,
                     stop_loss, confidence, 0, reasoning, position_size
                 )
+                if result:
+                    st.success(f"Opened {ticker} {direction} — £{position_size} ({confidence}) | Entry ${entry_price} | Target ${target} | Stop ${stop_loss}")
+                else:
+                    st.error(f"Failed to open {ticker} — Supabase did not confirm. Check your portfolio manually.")
 
             except Exception as e:
-                print(f"New trade parse error: {e}")
+                st.error(f"Trade parse error: {e} — line was: {line[:120]}")
