@@ -4,14 +4,18 @@ import os
 import json
 import httpx
 import pandas as pd
+import subprocess
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
+from dotenv import load_dotenv
+
 try:
     from streamlit_autorefresh import st_autorefresh
     autorefresh_available = True
 except ImportError:
     autorefresh_available = False
     st_autorefresh = None
+
 from fetcher import fetch_stock_data, fetch_historical_data
 from agent import analyse_stocks
 from news import fetch_stock_news
@@ -26,8 +30,6 @@ from portfolio import (
     get_portfolio_balance, get_open_positions, get_closed_positions,
     get_current_prices, STARTING_BALANCE
 )
-from dotenv import load_dotenv
-import subprocess
 
 # Only auto-refresh when not running an analysis
 if "analysis_running" not in st.session_state:
