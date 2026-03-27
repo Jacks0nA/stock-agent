@@ -33,33 +33,56 @@ SECTOR_ETFS = {
 
 ALL_TICKERS = {
     "Tech": [
+        # Large-cap
         "AAPL", "GOOGL", "NVDA", "MSFT", "META", "TSLA", "INTC",
         "AMD", "CRM", "NFLX", "PYPL", "UBER", "SNAP",
         "SPOT", "SHOP", "PLTR", "RBLX", "NET", "ZM", "DOCU", "TWLO",
-        "MDB", "OKTA"
+        "MDB", "OKTA",
+        # Mid-cap
+        "DDOG", "CRWD", "SQ", "NOW", "SNPS", "CDNS", "BILL", "UPST",
+        "SNOW", "DBX", "FTNT", "PINS", "ANET", "LRCX", "ENPH",
+        "SMCI", "MSTR", "PSTG", "ALGN", "TEAM"
     ],
     "Finance": [
+        # Large-cap
         "JPM", "BAC", "GS", "MS", "V", "AXP", "WFC", "BLK",
-        "SCHW", "COF", "USB", "BK", "CFG", "C", "RF"
+        "SCHW", "COF", "USB", "BK", "CFG", "C", "RF",
+        # Mid-cap
+        "SOFI", "HOOD", "COIN", "KKR", "OWL", "AVTR", "EQIX", "DLR"
     ],
     "Healthcare": [
+        # Large-cap
         "PFE", "UNH", "MRK", "ABBV", "ABT", "DHR",
         "AMGN", "GILD", "BIIB", "VRTX", "SYK", "MDT",
-        "BMY", "TMO"
+        "BMY", "TMO",
+        # Mid-cap
+        "VEEV", "EXAS", "DXCM", "TMDX", "CHWY", "TECH", "ISRG", "PODD",
+        "VYGR", "OSCR"
     ],
     "Energy": [
+        # Large-cap
         "COP", "EOG", "MPC", "VLO", "PSX",
         "OXY", "HAL", "BKR", "OVV", "SM", "APA",
-        "DVN", "FANG"
+        "DVN", "FANG",
+        # Mid-cap
+        "MRO", "CNX", "EQT", "AR", "MTDR", "RRC", "CIVI", "DOOR"
     ],
     "Consumer": [
+        # Large-cap
         "WMT", "PEP", "MCD", "SBUX", "NKE",
-        "TJX", "ROST", "DG", "DLTR", "YUM", "DPZ", "QSR"
+        "TJX", "ROST", "DG", "DLTR", "YUM", "DPZ", "QSR",
+        # Mid-cap
+        "DECK", "ULTA", "RH", "DASH", "ETSY", "SFIX", "LULU", "FIVE",
+        "BJRI", "TPH", "PTON", "APTV"
     ],
     "Industrial": [
+        # Large-cap
         "CAT", "DE", "HON", "MMM", "FDX",
         "NOC", "GD", "EMR", "PH", "ROK", "DOV", "XYL", "AME",
-        "RTX", "GE"
+        "RTX", "GE",
+        # Mid-cap
+        "CPRT", "IEX", "IR", "STLD", "HWM", "ABM", "LIN", "AWK",
+        "SITE", "ROP"
     ],
     "ETFs": [
         "SPY", "QQQ", "IWM", "DIA", "XLK", "XLF", "XLV", "XLY",
