@@ -5,6 +5,7 @@ import json
 import httpx
 import pandas as pd
 from datetime import datetime, timedelta, timezone
+from collections import defaultdict
 try:
     from streamlit_autorefresh import st_autorefresh
     autorefresh_available = True
@@ -146,15 +147,6 @@ def get_next_window():
         second=0, microsecond=0
     )
     return DAILY_WINDOWS[0], tomorrow
-
-def mark_window_complete(missed_window):
-    state = load_schedule_state()
-    today = datetime.now(GMT).strftime("%Y-%m-%d")
-    for window in DAILY_WINDOWS:
-        key = get_window_key(window, today)
-        if key not in state.get("last_run_windows", {}):
-            state.setdefault("last_run_windows", {})[key] = "skipped"
-    save_schedule_state(state)
 
 def mark_window_complete(window):
     state = load_schedule_state()
