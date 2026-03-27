@@ -405,7 +405,7 @@ with tab2:
 
     st.divider()
 
-    st.subheader(f"Open Positions ({len(open_positions)}/5)")
+    st.subheader(f"Open Positions ({len(open_positions)}/10)")
     if not open_positions:
         st.info("No open positions — Claude will open positions when high quality setups appear.")
     else:

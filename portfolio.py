@@ -8,7 +8,7 @@ import yfinance as yf
 load_dotenv()
 
 GMT = timezone.utc
-MAX_POSITIONS = 5
+MAX_POSITIONS = 10
 MAX_HOLD_DAYS = 10
 STARTING_BALANCE = 30000.0
 
