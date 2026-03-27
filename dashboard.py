@@ -10,8 +10,7 @@ try:
 except ImportError:
     autorefresh_available = False
     st_autorefresh = None
-from fetcher import fetch_stock_data, fetch_historical_data, fetch_fundamentals
-from prediction_tracker import check_prediction_outcomes
+from fetcher import fetch_stock_data, fetch_historical_data
 from agent import analyse_stocks
 from news import fetch_stock_news
 from earnings import get_earnings_calendar, get_earnings_summary
