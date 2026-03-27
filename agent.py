@@ -371,15 +371,63 @@ Optimal hold period is 5 days. BUY signals have 80% historical accuracy in bull 
             else:
                 return "Claude is currently overloaded. Please wait a moment and refresh."
 
+def check_exit_signals(open_positions, historical, current_prices):
+    """
+    Check for proactive exit signals: technical flip, volatility spike, momentum decay.
+    Returns list of (ticker, reason) tuples for positions that should exit.
+    """
+    exit_signals = []
+
+    for position in open_positions:
+        ticker = position["ticker"]
+        hist = historical.get(ticker, {})
+        current_price = current_prices.get(ticker)
+        entry_price = float(position["entry_price"])
+
+        if not hist or not current_price:
+            continue
+
+        # 1. TECHNICAL SIGNAL EXIT: RSI/MACD bearish flip
+        rsi = hist.get("rsi", None)
+        rsi_signal = hist.get("rsi_signal", "")
+        macd_signal = hist.get("macd_signal", "")
+
+        if rsi and rsi > 60 and rsi_signal == "SELL":
+            exit_signals.append((ticker, f"RSI bearish flip at {rsi}"))
+
+        if macd_signal == "SELL":
+            exit_signals.append((ticker, "MACD turned bearish"))
+
+        # 2. VOLATILITY EXIT: Volatility spikes
+        bb_signal = hist.get("bb_signal", "")
+        if "OVERBOUGHT" in bb_signal or "extreme" in bb_signal.lower():
+            exit_signals.append((ticker, "Bollinger Bands overbought (volatility spike)"))
+
+        # 3. MOMENTUM DECAY: RSI declining from peaks while price still up
+        if rsi and rsi < 45 and current_price > entry_price:
+            exit_signals.append((ticker, f"Momentum decay: RSI fell to {rsi} despite price up {round((current_price - entry_price) / entry_price * 100, 1)}%"))
+
+    return exit_signals
+
 def execute_trade_decisions(analysis_text, historical, options_summary,
                              insider_summary, current_prices, open_positions,
                              market_is_open=True):
     """
     Parses Claude's structured output and executes position opens/updates/closes.
+    Also checks for proactive exit signals (technical flip, volatility, momentum decay).
     """
     lines = analysis_text.split("\n")
 
     open_position_map = {p["ticker"]: p for p in open_positions}
+
+    # Check for proactive exit signals before processing analysis
+    exit_signals = check_exit_signals(open_positions, historical, current_prices)
+    for ticker, reason in exit_signals:
+        if ticker in open_position_map:
+            position = open_position_map[ticker]
+            current_price = current_prices.get(ticker, float(position["entry_price"]))
+            close_position(position["id"], current_price, f"Auto-exit: {reason}")
+            st.warning(f"⚠️ Auto-exited {ticker}: {reason}")
 
     for line in lines:
         line = line.strip()
