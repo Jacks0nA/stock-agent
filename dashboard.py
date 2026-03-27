@@ -4,6 +4,7 @@ import os
 import json
 import httpx
 from datetime import datetime, timezone, timedelta
+from streamlit_autorefresh import st_autorefresh
 from fetcher import fetch_stock_data, fetch_historical_data, fetch_fundamentals
 from prediction_tracker import check_prediction_outcomes
 from agent import analyse_stocks
@@ -21,6 +22,14 @@ from portfolio import (
 )
 from dotenv import load_dotenv
 import subprocess
+from streamlit_autorefresh import st_autorefresh
+
+# Only auto-refresh when not running an analysis
+if "analysis_running" not in st.session_state:
+    st.session_state.analysis_running = False
+
+if not st.session_state.analysis_running:
+    st_autorefresh(interval=60000, key="autorefresh")
 
 load_dotenv()
 
@@ -149,6 +158,8 @@ def is_market_open():
     return not is_weekend and market_open <= now <= market_close
 
 def run_full_analysis(mode="Manual", market_is_open=True):
+    st.session_state.analysis_running = False
+    return analysis, tickers
     with st.spinner("Stage 1 — Screening assets..."):
         shortlist, market_regime = run_screen()
 
