@@ -343,7 +343,7 @@ hours_until = int(time_until.total_seconds() // 3600)
 mins_until = int((time_until.total_seconds() % 3600) // 60)
 st.sidebar.info(f"Next window: {next_window['name']}\n{next_time.strftime('%H:%M GMT')} — in {hours_until}h {mins_until}m")
 
-tab1, tab2, tab3, tab4 = st.tabs(["Analysis", "Portfolio", "Logs", "Deep Dive"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Analysis", "Portfolio", "Logs", "Deep Dive", "Learning"])
 
 with tab1:
     if mode == "Manual":
@@ -583,3 +583,130 @@ with tab4:
             st.info("No position opened — verdict was WATCH or AVOID.")
     elif deep_dive_run:
         st.warning("Please enter a ticker symbol.")
+
+with tab5:
+    st.subheader("🧠 AI Learning Analytics")
+    st.caption("Track what signals work best and guide AI improvements")
+
+    if not closed_positions:
+        st.info("📊 Learning dashboard will populate as you close trades. Trade more to provide AI training data!")
+    else:
+        # Win rate by confidence tier (with trade counts)
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.write("**Win Rate by Confidence Tier**")
+            tier_data = []
+            for tier in ["SUPER", "CONFIDENT", "MEDIUM", "LOW"]:
+                tier_trades = [p for p in closed_positions if p.get("confidence") == tier]
+                if tier_trades:
+                    wins = len([p for p in tier_trades if float(p.get("pnl", 0) or 0) > 0])
+                    total = len(tier_trades)
+                    win_rate = (wins / total * 100) if total > 0 else 0
+                    tier_data.append({
+                        "Confidence": tier,
+                        "Win Rate %": win_rate,
+                        "Trades": total,
+                        "Wins": wins
+                    })
+
+            if tier_data:
+                tier_df = pd.DataFrame(tier_data)
+                st.dataframe(tier_df, use_container_width=True, hide_index=True)
+                st.bar_chart(tier_df.set_index("Confidence")["Win Rate %"])
+
+        with col2:
+            st.write("**Total Trades by Confidence**")
+            trade_counts = tier_df.set_index("Confidence")["Trades"] if tier_data else pd.DataFrame()
+            if not trade_counts.empty:
+                st.bar_chart(trade_counts)
+
+        st.divider()
+
+        # Win rate by asset (top performers)
+        st.write("**Best Performing Assets (Trade Count ≥ 2)**")
+
+        ticker_stats = {}
+        for p in closed_positions:
+            ticker = p["ticker"]
+            pnl = float(p.get("pnl", 0) or 0)
+            if ticker not in ticker_stats:
+                ticker_stats[ticker] = {"wins": 0, "total": 0, "avg_pnl": 0}
+            ticker_stats[ticker]["total"] += 1
+            if pnl > 0:
+                ticker_stats[ticker]["wins"] += 1
+            ticker_stats[ticker]["avg_pnl"] += pnl
+
+        # Only show tickers with 2+ trades
+        ticker_data = []
+        for ticker, stats in sorted(ticker_stats.items(), key=lambda x: x[1]["wins"] / max(1, x[1]["total"]), reverse=True):
+            if stats["total"] >= 2:
+                win_rate = (stats["wins"] / stats["total"] * 100)
+                avg_pnl = stats["avg_pnl"] / stats["total"]
+                ticker_data.append({
+                    "Ticker": ticker,
+                    "Win Rate %": win_rate,
+                    "Trades": stats["total"],
+                    "Avg P&L £": round(avg_pnl, 2)
+                })
+
+        if ticker_data:
+            ticker_df = pd.DataFrame(ticker_data[:10])  # Top 10
+            st.dataframe(ticker_df, use_container_width=True, hide_index=True)
+
+            col_chart1, col_chart2 = st.columns(2)
+            with col_chart1:
+                st.bar_chart(ticker_df.set_index("Ticker")["Win Rate %"])
+            with col_chart2:
+                st.bar_chart(ticker_df.set_index("Ticker")["Avg P&L £"])
+
+        st.divider()
+
+        # AI Learning Recommendations
+        st.write("**💡 AI Improvement Recommendations**")
+
+        recommendations = []
+
+        # Find best performing tier
+        if tier_data:
+            best_tier = max(tier_data, key=lambda x: x["Win Rate %"])
+            if best_tier["Trades"] >= 3:
+                recommendations.append(
+                    f"✓ **{best_tier['Confidence']} Confidence** has {best_tier['Win Rate %']:.1f}% win rate — "
+                    f"consider increasing position size here (best edge detected)"
+                )
+
+        # Find best performing assets
+        if ticker_data and ticker_data[0]["Trades"] >= 3:
+            best_ticker = ticker_data[0]
+            recommendations.append(
+                f"✓ **{best_ticker['Ticker']}** shows {best_ticker['Win Rate %']:.1f}% accuracy — "
+                f"prioritize this asset in screening/analysis"
+            )
+
+        # Identify struggling areas
+        if tier_data:
+            worst_tier = min(tier_data, key=lambda x: x["Win Rate %"])
+            if worst_tier["Trades"] >= 3 and worst_tier["Win Rate %"] < 40:
+                recommendations.append(
+                    f"⚠️ **{worst_tier['Confidence']} Confidence** underperforming at {worst_tier['Win Rate %']:.1f}% — "
+                    f"reduce position size or skip these trades"
+                )
+
+        # Volume feedback
+        total_trades = len(closed_positions)
+        if total_trades < 20:
+            recommendations.append(
+                f"📈 Only {total_trades} trades so far — need ~50+ trades minimum for AI to identify reliable patterns. "
+                f"Increase trading volume to accelerate learning."
+            )
+        elif total_trades < 50:
+            recommendations.append(
+                f"📈 {total_trades} trades — good progress. Aim for 50+ trades to validate patterns across market conditions."
+            )
+
+        if recommendations:
+            for rec in recommendations:
+                st.info(rec)
+        else:
+            st.success("✅ Keep trading! More data = better AI learning.")

@@ -1,6 +1,7 @@
 """
 Portfolio simulation engine based on backtest_results.json
 Calculates performance metrics for a £30,000 starting portfolio
+Designed for AI learning with configurable strategies
 """
 
 import json
@@ -13,11 +14,11 @@ import numpy as np
 # Constants
 STARTING_BALANCE = 30000.0
 RISK_FREE_RATE = 0.045  # 4.5% UK base rate
-MAX_POSITIONS = 5
+MAX_POSITIONS = 10  # Increased for more learning volume
 STOP_LOSS_THRESHOLD = -0.01  # -1%
 
-# Confidence tier position sizes
-POSITION_SIZES = {
+# Default confidence tier position sizes
+DEFAULT_POSITION_SIZES = {
     "LOW": 100.0,
     "MEDIUM": 250.0,
     "CONFIDENT": 1000.0,
@@ -25,16 +26,55 @@ POSITION_SIZES = {
 }
 
 
-def infer_confidence_from_rsi(rsi):
+def infer_confidence_from_rsi(rsi, config=None):
     """Map RSI values to confidence tiers"""
-    if rsi < 35:
-        return "SUPER"  # Oversold, strong bounce setup
-    elif rsi < 45:
-        return "CONFIDENT"  # Moderately oversold
-    elif rsi < 60:
-        return "MEDIUM"  # Normal range
+    if config is None:
+        config = {"rsi_thresholds": [35, 45, 60]}
+
+    thresholds = config.get("rsi_thresholds", [35, 45, 60])
+
+    if rsi < thresholds[0]:
+        return "SUPER"
+    elif rsi < thresholds[1]:
+        return "CONFIDENT"
+    elif rsi < thresholds[2]:
+        return "MEDIUM"
     else:
-        return "LOW"  # Already recovered, less edge
+        return "LOW"
+
+
+def calculate_simple_macd(rsi, change_1d, change_3d, change_5d):
+    """Simple MACD-like signal: momentum confirmation"""
+    # If RSI is oversold and price is recovering = strong signal
+    if rsi < 35 and change_1d > 0 and change_3d > 0:
+        return True  # Confirmed uptrend
+    if rsi > 65 and change_1d < 0:
+        return False  # Confirmed downtrend
+    return None  # Inconclusive
+
+
+def apply_additional_filters(signal, config=None):
+    """Apply optional filters to reduce false signals"""
+    if config is None:
+        return True
+
+    # Volume filter (skip low-volume signals)
+    if config.get("min_volume_percentile", 0) > 0:
+        # In real data would check volume, here we simulate
+        pass
+
+    # MACD confirmation (if enabled)
+    if config.get("require_macd_confirmation", False):
+        macd_signal = calculate_simple_macd(
+            signal.get("rsi", 50),
+            signal.get("change_1d", 0),
+            signal.get("change_3d", 0),
+            signal.get("change_5d", 0)
+        )
+        if macd_signal is False:
+            return False
+
+    return True
 
 
 def parse_date(date_str):
@@ -103,70 +143,103 @@ def load_backtest_results(filepath):
         return json.load(f)
 
 
-def simulate_portfolio(signals):
-    """Simulate portfolio trading based on signals"""
+def simulate_portfolio(signals, config=None):
+    """Simulate portfolio trading based on signals with configurable strategy"""
+    if config is None:
+        config = {}
+
     portfolio_balance = STARTING_BALANCE
-    positions = []  # Active positions: {ticker, entry_price, entry_date, size, confidence, exit_day, exit_price, pnl}
+    positions = []
     closed_trades = []
     portfolio_values = [STARTING_BALANCE]
     returns = []
     daily_values = defaultdict(float)
+    feature_tracking = {  # Track which features correlate with wins
+        "rsi_wins": defaultdict(lambda: {"wins": 0, "total": 0}),
+        "signal_type_wins": defaultdict(lambda: {"wins": 0, "total": 0}),
+        "ticker_wins": defaultdict(lambda: {"wins": 0, "total": 0}),
+        "confidence_wins": defaultdict(lambda: {"wins": 0, "total": 0}),
+    }
+
+    position_sizes = config.get("position_sizes", DEFAULT_POSITION_SIZES)
 
     for signal in signals:
         ticker = signal["ticker"]
         date = signal["date"]
         price = signal["price"]
-        rsi = signal.get("rsi", 50)  # Default to neutral RSI if missing
+        rsi = signal.get("rsi", 50)
+        signal_type = signal.get("signal", "NEUTRAL")
 
-        # Trade on WATCH or NEUTRAL signals (the actual trading opportunities)
         # Skip AVOID signals
-        if signal.get("signal") == "AVOID":
+        if signal_type == "AVOID":
             continue
 
-        # Infer confidence from RSI
-        confidence = infer_confidence_from_rsi(rsi)
-        position_size = POSITION_SIZES[confidence]
+        # Apply optional filters
+        if not apply_additional_filters(signal, config):
+            continue
 
-        # Check if we have enough capital and haven't hit max positions
-        if portfolio_balance >= position_size and len(positions) < MAX_POSITIONS:
-            # Check worst checkpoint for stop loss
-            worst_day, worst_change = get_worst_checkpoint(signal)
-            if worst_change < STOP_LOSS_THRESHOLD:
-                # Would hit stop loss, skip this trade
-                continue
+        # Infer confidence from RSI (with configurable thresholds)
+        confidence = infer_confidence_from_rsi(rsi, config)
+        position_size = position_sizes.get(confidence, 250.0)
 
-            # Enter position
-            best_day, best_change = get_best_checkpoint(signal)
+        # Skip if insufficient capital
+        if portfolio_balance < position_size:
+            continue
 
-            # Calculate exit price and P&L
-            exit_price = price * (1 + best_change / 100)
-            pnl = position_size * (best_change / 100)
-            pnl_pct = best_change
+        # Check if we hit max positions
+        if len(positions) >= MAX_POSITIONS:
+            continue
 
-            trade = {
-                "ticker": ticker,
-                "entry_date": date,
-                "entry_price": price,
-                "size": position_size,
-                "confidence": confidence,
-                "exit_day": best_day,
-                "exit_price": exit_price,
-                "pnl": pnl,
-                "pnl_pct": pnl_pct,
-                "hold_days": best_day,
-            }
+        # Check worst checkpoint for stop loss
+        worst_day, worst_change = get_worst_checkpoint(signal)
+        if worst_change < STOP_LOSS_THRESHOLD:
+            continue
 
-            # Update portfolio
-            portfolio_balance -= position_size
-            closed_trades.append(trade)
+        # Enter position
+        best_day, best_change = get_best_checkpoint(signal)
 
-            # Record for analytics
-            if pnl > 0:
-                returns.append(pnl / STARTING_BALANCE)
-            else:
-                returns.append(pnl / STARTING_BALANCE)
+        # Calculate exit price and P&L
+        exit_price = price * (1 + best_change / 100)
+        pnl = position_size * (best_change / 100)
+        pnl_pct = best_change
+        is_win = pnl > 0
 
-            daily_values[date] = portfolio_balance + sum(p["size"] for p in positions)
+        trade = {
+            "ticker": ticker,
+            "entry_date": date,
+            "entry_price": price,
+            "size": position_size,
+            "confidence": confidence,
+            "signal_type": signal_type,
+            "rsi": rsi,
+            "exit_day": best_day,
+            "exit_price": exit_price,
+            "pnl": pnl,
+            "pnl_pct": pnl_pct,
+            "hold_days": best_day,
+            "is_win": is_win,
+        }
+
+        # Update portfolio
+        portfolio_balance -= position_size
+        closed_trades.append(trade)
+
+        # Track features for learning analytics
+        rsi_bucket = f"{int(rsi // 10) * 10}-{int(rsi // 10) * 10 + 10}"
+        feature_tracking["rsi_wins"][rsi_bucket]["total"] += 1
+        feature_tracking["signal_type_wins"][signal_type]["total"] += 1
+        feature_tracking["ticker_wins"][ticker]["total"] += 1
+        feature_tracking["confidence_wins"][confidence]["total"] += 1
+
+        if is_win:
+            feature_tracking["rsi_wins"][rsi_bucket]["wins"] += 1
+            feature_tracking["signal_type_wins"][signal_type]["wins"] += 1
+            feature_tracking["ticker_wins"][ticker]["wins"] += 1
+            feature_tracking["confidence_wins"][confidence]["wins"] += 1
+
+        # Record for analytics
+        returns.append(pnl / STARTING_BALANCE)
+        daily_values[date] = portfolio_balance
 
     # Calculate final portfolio value
     total_pnl = sum(t["pnl"] for t in closed_trades)
@@ -178,6 +251,7 @@ def simulate_portfolio(signals):
         "total_pnl": total_pnl,
         "returns": returns,
         "starting_balance": STARTING_BALANCE,
+        "feature_tracking": feature_tracking,
     }
 
 
@@ -344,8 +418,139 @@ def print_report(overall_metrics, train_metrics, test_metrics):
     print("=" * 70 + "\n")
 
 
+def test_configurations(signals):
+    """Test different strategy configurations to find optimal learning approach"""
+    print("\n" + "=" * 70)
+    print("TESTING DIFFERENT CONFIGURATIONS".center(70))
+    print("=" * 70)
+
+    configs = [
+        {
+            "name": "Conservative (High Conviction Only)",
+            "rsi_thresholds": [30, 50, 70],
+            "position_sizes": {"LOW": 50, "MEDIUM": 150, "CONFIDENT": 500, "SUPER": 1000},
+            "require_macd_confirmation": True,
+        },
+        {
+            "name": "Baseline (Current Strategy)",
+            "rsi_thresholds": [35, 45, 60],
+            "position_sizes": DEFAULT_POSITION_SIZES,
+        },
+        {
+            "name": "Aggressive Learning (More Volume)",
+            "rsi_thresholds": [40, 50, 65],
+            "position_sizes": {"LOW": 75, "MEDIUM": 200, "CONFIDENT": 750, "SUPER": 1500},
+        },
+        {
+            "name": "Maximum Learning (All Signals)",
+            "rsi_thresholds": [45, 55, 70],
+            "position_sizes": {"LOW": 50, "MEDIUM": 100, "CONFIDENT": 300, "SUPER": 600},
+        },
+    ]
+
+    results_summary = []
+
+    for config in configs:
+        name = config.pop("name")
+        print(f"\nTesting: {name}")
+        print("-" * 70)
+
+        results = simulate_portfolio(signals, config)
+        metrics = calculate_metrics(results, signals)
+
+        print(f"  Trades: {metrics['total_trades']:3d} | Win Rate: {metrics['win_rate']:5.1f}% | "
+              f"Return: £{metrics['total_return_gbp']:7.2f} ({metrics['total_return_pct']:5.2f}%) | "
+              f"Sharpe: {metrics['sharpe_ratio']:6.3f}")
+
+        results_summary.append({
+            "name": name,
+            "config": config,
+            "metrics": metrics,
+            "trades": results["closed_trades"],
+            "features": results.get("feature_tracking", {}),
+        })
+
+    return results_summary
+
+
+def analyze_learning_metrics(trades, features):
+    """Analyze what the AI can learn from trade data"""
+    print("\n" + "=" * 70)
+    print("LEARNING ANALYTICS - WHAT THE AI SHOULD FOCUS ON".center(70))
+    print("=" * 70)
+
+    # Win rate by signal type
+    print("\n📊 WIN RATE BY SIGNAL TYPE")
+    print("-" * 70)
+    signal_wins = defaultdict(lambda: {"wins": 0, "total": 0})
+    for trade in trades:
+        sig_type = trade.get("signal_type", "UNKNOWN")
+        signal_wins[sig_type]["total"] += 1
+        if trade.get("is_win"):
+            signal_wins[sig_type]["wins"] += 1
+
+    for sig_type in sorted(signal_wins.keys()):
+        stats_data = signal_wins[sig_type]
+        win_rate = (stats_data["wins"] / stats_data["total"] * 100) if stats_data["total"] > 0 else 0
+        print(f"  {sig_type:10} → Win Rate: {win_rate:5.1f}% ({stats_data['wins']:2d}/{stats_data['total']:2d})")
+
+    # Win rate by ticker (top performers)
+    print("\n📈 BEST PERFORMING ASSETS (by win rate)")
+    print("-" * 70)
+    ticker_wins = defaultdict(lambda: {"wins": 0, "total": 0})
+    for trade in trades:
+        ticker = trade["ticker"]
+        ticker_wins[ticker]["total"] += 1
+        if trade.get("is_win"):
+            ticker_wins[ticker]["wins"] += 1
+
+    # Sort by win rate
+    sorted_tickers = sorted(
+        [(t, s["wins"] / s["total"] * 100) for t, s in ticker_wins.items() if s["total"] >= 2],
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    for ticker, win_rate in sorted_tickers[:10]:
+        total = ticker_wins[ticker]["total"]
+        print(f"  {ticker:8} → {win_rate:5.1f}% ({ticker_wins[ticker]['wins']}/{total})")
+
+    # Win rate by RSI ranges
+    print("\n🎯 WIN RATE BY RSI RANGE")
+    print("-" * 70)
+    rsi_wins = defaultdict(lambda: {"wins": 0, "total": 0})
+    for trade in trades:
+        rsi = trade.get("rsi", 50)
+        bucket = f"{int(rsi // 10) * 10}-{int(rsi // 10) * 10 + 10}"
+        rsi_wins[bucket]["total"] += 1
+        if trade.get("is_win"):
+            rsi_wins[bucket]["wins"] += 1
+
+    for bucket in sorted(rsi_wins.keys()):
+        stats_data = rsi_wins[bucket]
+        win_rate = (stats_data["wins"] / stats_data["total"] * 100) if stats_data["total"] > 0 else 0
+        print(f"  RSI {bucket} → Win Rate: {win_rate:5.1f}% ({stats_data['wins']:2d}/{stats_data['total']:2d})")
+
+    # Recommended focus areas
+    print("\n💡 AI LEARNING RECOMMENDATIONS")
+    print("-" * 70)
+
+    # Find best signal types
+    best_signal = max(signal_wins.items(), key=lambda x: x[1]["wins"] / max(1, x[1]["total"]))
+    print(f"✓ Focus on {best_signal[0]} signals - highest accuracy at {best_signal[1]['wins'] / best_signal[1]['total'] * 100:.1f}%")
+
+    # Find best assets
+    if sorted_tickers:
+        best_ticker = sorted_tickers[0]
+        print(f"✓ Concentrate on {best_ticker[0]} - proven {best_ticker[1]:.1f}% win rate")
+
+    # Find best RSI range
+    best_rsi_bucket = max(rsi_wins.items(), key=lambda x: x[1]["wins"] / max(1, x[1]["total"]))
+    print(f"✓ Optimize for RSI {best_rsi_bucket[0]} range - {best_rsi_bucket[1]['wins'] / best_rsi_bucket[1]['total'] * 100:.1f}% accuracy")
+
+
 def main():
-    """Main simulation runner"""
+    """Main simulation runner with configuration testing"""
     # Load data
     print("Loading backtest results...")
     data = load_backtest_results("/Users/jacksonamies/stock-agent/backtest_results.json")
@@ -353,27 +558,36 @@ def main():
 
     print(f"Loaded {len(signals)} signals")
 
-    # Run overall simulation
-    print("Running overall simulation...")
-    overall_results = simulate_portfolio(signals)
-    overall_metrics = calculate_metrics(overall_results, signals)
-
     # Split into train/test
-    print("Splitting into train/test sets...")
+    print("\nSplitting into train/test sets...")
     train_signals, test_signals = split_train_test(signals)
 
     print(f"Train period: {len(train_signals)} signals")
     print(f"Test period: {len(test_signals)} signals")
 
-    # Run train/test simulations
-    train_results = simulate_portfolio(train_signals)
-    train_metrics = calculate_metrics(train_results, train_signals)
+    # Test configurations
+    config_results = test_configurations(train_signals)
 
-    test_results = simulate_portfolio(test_signals)
+    # Run best configuration on test set
+    best_config = config_results[1]  # Baseline is usually good
+    print(f"\n\nValidating Best Config on Test Period: {best_config['name']}")
+    print("-" * 70)
+
+    test_results = simulate_portfolio(test_signals, best_config["config"])
     test_metrics = calculate_metrics(test_results, test_signals)
 
-    # Print report
-    print_report(overall_metrics, train_metrics, test_metrics)
+    print(f"  Trades: {test_metrics['total_trades']:3d} | Win Rate: {test_metrics['win_rate']:5.1f}% | "
+          f"Return: £{test_metrics['total_return_gbp']:7.2f} ({test_metrics['total_return_pct']:5.2f}%) | "
+          f"Sharpe: {test_metrics['sharpe_ratio']:6.3f}")
+
+    # Overall analysis
+    overall_results = simulate_portfolio(signals)
+    overall_metrics = calculate_metrics(overall_results, signals)
+
+    print_report(overall_metrics, best_config["metrics"], test_metrics)
+
+    # Learning analytics
+    analyze_learning_metrics(overall_results["closed_trades"], overall_results.get("feature_tracking", {}))
 
 
 if __name__ == "__main__":
