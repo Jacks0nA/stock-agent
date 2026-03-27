@@ -3,7 +3,11 @@ import time
 import os
 import json
 import httpx
-from datetime import datetime, timezone, timedelta
+try:
+    from streamlit_autorefresh import st_autorefresh
+    autorefresh_available = True
+except ImportError:
+    autorefresh_available = False
 from streamlit_autorefresh import st_autorefresh
 from fetcher import fetch_stock_data, fetch_historical_data, fetch_fundamentals
 from prediction_tracker import check_prediction_outcomes
@@ -28,7 +32,7 @@ from streamlit_autorefresh import st_autorefresh
 if "analysis_running" not in st.session_state:
     st.session_state.analysis_running = False
 
-if not st.session_state.analysis_running:
+if not st.session_state.analysis_running and autorefresh_available:
     st_autorefresh(interval=60000, key="autorefresh")
 
 load_dotenv()
