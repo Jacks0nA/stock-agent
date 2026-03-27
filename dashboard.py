@@ -3,12 +3,13 @@ import time
 import os
 import json
 import httpx
+from datetime import datetime, timedelta, timezone
 try:
     from streamlit_autorefresh import st_autorefresh
     autorefresh_available = True
 except ImportError:
     autorefresh_available = False
-from streamlit_autorefresh import st_autorefresh
+    st_autorefresh = None
 from fetcher import fetch_stock_data, fetch_historical_data, fetch_fundamentals
 from prediction_tracker import check_prediction_outcomes
 from agent import analyse_stocks
@@ -26,7 +27,6 @@ from portfolio import (
 )
 from dotenv import load_dotenv
 import subprocess
-from streamlit_autorefresh import st_autorefresh
 
 # Only auto-refresh when not running an analysis
 if "analysis_running" not in st.session_state:
@@ -162,89 +162,91 @@ def is_market_open():
     return not is_weekend and market_open <= now <= market_close
 
 def run_full_analysis(mode="Manual", market_is_open=True):
-    st.session_state.analysis_running = False
-    return analysis, tickers
-    with st.spinner("Stage 1 — Screening assets..."):
-        shortlist, market_regime = run_screen()
+    st.session_state.analysis_running = True
+    try:
+        with st.spinner("Stage 1 — Screening assets..."):
+            shortlist, market_regime = run_screen()
 
-    tickers = [r["ticker"] for r in shortlist]
+        tickers = [r["ticker"] for r in shortlist]
 
-    buy_signals = [r for r in shortlist if r["signal"] == "BUY"]
-    avoid_signals = [r for r in shortlist if r["signal"] == "AVOID"]
-    watch_signals = [r for r in shortlist if r["signal"] == "WATCH"]
+        buy_signals = [r for r in shortlist if r["signal"] == "BUY"]
+        avoid_signals = [r for r in shortlist if r["signal"] == "AVOID"]
+        watch_signals = [r for r in shortlist if r["signal"] == "WATCH"]
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("🟢 Buy", len(buy_signals))
-    col2.metric("🔴 Avoid", len(avoid_signals))
-    col3.metric("⚪ Watch", len(watch_signals))
+        col1, col2, col3 = st.columns(3)
+        col1.metric("🟢 Buy", len(buy_signals))
+        col2.metric("🔴 Avoid", len(avoid_signals))
+        col3.metric("⚪ Watch", len(watch_signals))
 
-    st.subheader("Shortlisted Assets")
-    for r in shortlist:
-        emoji = "🟢" if r["signal"] == "BUY" else "🔴" if r["signal"] == "AVOID" else "⚪"
-        st.write(f"{emoji} **{r['ticker']}** — ${r['price']} — Score: {r['score']} — {', '.join(r['reasons'])}")
+        st.subheader("Shortlisted Assets")
+        for r in shortlist:
+            emoji = "🟢" if r["signal"] == "BUY" else "🔴" if r["signal"] == "AVOID" else "⚪"
+            st.write(f"{emoji} **{r['ticker']}** — ${r['price']} — Score: {r['score']} — {', '.join(r['reasons'])}")
 
-    with st.spinner("Fetching market context..."):
-        market_context = get_market_context()
+        with st.spinner("Fetching market context..."):
+            market_context = get_market_context()
 
-    spy = market_context.get("SPY")
-    qqq = market_context.get("QQQ")
-    xle = market_context.get("XLE")
-    col1, col2, col3 = st.columns(3)
-    if spy:
-        col1.metric("S&P 500", f"${spy['price']}", f"{spy['change_percent']}%")
-    if qqq:
-        col2.metric("NASDAQ", f"${qqq['price']}", f"{qqq['change_percent']}%")
-    if xle:
-        col3.metric("Energy", f"${xle['price']}", f"{xle['change_percent']}%")
+        spy = market_context.get("SPY")
+        qqq = market_context.get("QQQ")
+        xle = market_context.get("XLE")
+        col1, col2, col3 = st.columns(3)
+        if spy:
+            col1.metric("S&P 500", f"${spy['price']}", f"{spy['change_percent']}%")
+        if qqq:
+            col2.metric("NASDAQ", f"${qqq['price']}", f"{qqq['change_percent']}%")
+        if xle:
+            col3.metric("Energy", f"${xle['price']}", f"{xle['change_percent']}%")
 
-    with st.spinner("Fetching live prices..."):
-        df = fetch_stock_data(tickers)
-    st.dataframe(df)
+        with st.spinner("Fetching live prices..."):
+            df = fetch_stock_data(tickers)
+        st.dataframe(df)
 
-    with st.spinner("Fetching technical indicators..."):
-        historical = fetch_historical_data(tickers)
+        with st.spinner("Fetching technical indicators..."):
+            historical = fetch_historical_data(tickers)
 
-    with st.spinner("Fetching fundamentals (P/E, analyst targets, short interest)..."):
-        fundamentals = fetch_fundamentals(tickers)
+        with st.spinner("Fetching fundamentals (P/E, analyst targets, short interest)..."):
+            fundamentals = fetch_fundamentals(tickers)
 
-    with st.spinner("Checking earnings..."):
-        earnings = get_earnings_calendar(tickers)
-    earnings_summary = get_earnings_summary(earnings)
-    if "No earnings" not in earnings_summary:
-        st.warning(earnings_summary)
+        with st.spinner("Checking earnings..."):
+            earnings = get_earnings_calendar(tickers)
+        earnings_summary = get_earnings_summary(earnings)
+        if "No earnings" not in earnings_summary:
+            st.warning(earnings_summary)
 
-    with st.spinner("Fetching options flow..."):
-        options_summary = get_options_summary(tickers)
+        with st.spinner("Fetching options flow..."):
+            options_summary = get_options_summary(tickers)
 
-    with st.spinner("Checking insider activity..."):
-        insider_summary = get_insider_summary(tickers)
+        with st.spinner("Checking insider activity..."):
+            insider_summary = get_insider_summary(tickers)
 
-    with st.spinner("Fetching news..."):
-        if get_enhanced_news_setting():
-            from news_enhanced import fetch_stock_news_enhanced
-            news = fetch_stock_news_enhanced(tickers)
-            st.sidebar.caption("Enhanced news active")
-        else:
-            news = fetch_stock_news(tickers)
+        with st.spinner("Fetching news..."):
+            if get_enhanced_news_setting():
+                from news_enhanced import fetch_stock_news_enhanced
+                news = fetch_stock_news_enhanced(tickers)
+                st.sidebar.caption("Enhanced news active")
+            else:
+                news = fetch_stock_news(tickers)
 
-    if not market_is_open:
-        st.info("Markets are currently closed — analysis running but no new positions will be opened.")
+        if not market_is_open:
+            st.info("Markets are currently closed — analysis running but no new positions will be opened.")
 
-    with st.spinner(f"Claude analysing — {mode} mode..."):
-        analysis = analyse_stocks(
-            df, news, historical, earnings,
-            market_context, insider_summary, options_summary,
-            market_is_open=market_is_open,
-            fundamentals=fundamentals,
-        )
+        with st.spinner(f"Claude analysing — {mode} mode..."):
+            analysis = analyse_stocks(
+                df, news, historical, earnings,
+                market_context, insider_summary, options_summary,
+                market_is_open=market_is_open,
+                fundamentals=fundamentals,
+            )
 
-    st.subheader("Claude's Analysis")
-    st.write(analysis)
+        st.subheader("Claude's Analysis")
+        st.write(analysis)
 
-    log_file = save_daily_log(analysis, mode=mode, tickers=tickers)
-    st.success(f"Saved to {log_file}")
+        log_file = save_daily_log(analysis, mode=mode, tickers=tickers)
+        st.success(f"Saved to {log_file}")
 
-    return analysis, tickers
+        return analysis, tickers
+    finally:
+        st.session_state.analysis_running = False
 
 # Version
 try:
