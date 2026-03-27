@@ -3,6 +3,7 @@ import time
 import os
 import json
 import httpx
+import pandas as pd
 from datetime import datetime, timedelta, timezone
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -168,6 +169,61 @@ def is_market_open():
     market_close = now.replace(hour=20, minute=0, second=0, microsecond=0)
     is_weekend = now.weekday() >= 5
     return not is_weekend and market_open <= now <= market_close
+
+def get_portfolio_value_over_time(closed_positions):
+    """Reconstruct portfolio value timeline from closed positions"""
+    if not closed_positions:
+        return pd.DataFrame({"Date": ["Today"], "Portfolio Value": [STARTING_BALANCE]})
+
+    # Start with initial balance
+    timeline = [{"Date": "Start", "Portfolio Value": STARTING_BALANCE}]
+
+    # Sort by closed_at date
+    sorted_positions = sorted(closed_positions, key=lambda p: p.get("closed_at", ""))
+
+    cumulative_pnl = 0
+    for pos in sorted_positions:
+        pnl = float(pos.get("pnl", 0)) or 0
+        cumulative_pnl += pnl
+        date_str = pos.get("closed_at", "").split(" ")[0]  # Extract just the date
+        timeline.append({"Date": date_str, "Portfolio Value": STARTING_BALANCE + cumulative_pnl})
+
+    # Add current value as final point
+    current_balance = get_portfolio_balance()
+    open_positions = get_open_positions()
+    total_invested = sum(float(p["position_size"]) for p in open_positions) if open_positions else 0
+    current_value = current_balance + total_invested
+    timeline.append({"Date": datetime.now(GMT).strftime("%Y-%m-%d"), "Portfolio Value": current_value})
+
+    return pd.DataFrame(timeline)
+
+def get_win_rate_by_tier(closed_positions):
+    """Calculate win rate for each confidence tier"""
+    tiers = ["LOW", "MEDIUM", "CONFIDENT", "SUPER"]
+    data = []
+
+    for tier in tiers:
+        tier_trades = [p for p in closed_positions if p.get("confidence") == tier]
+        if tier_trades:
+            wins = len([p for p in tier_trades if float(p.get("pnl", 0) or 0) > 0])
+            win_rate = (wins / len(tier_trades) * 100) if tier_trades else 0
+        else:
+            win_rate = 0
+
+        data.append({"Confidence": tier, "Win Rate %": round(win_rate, 1)})
+
+    return pd.DataFrame(data)
+
+def get_pnl_by_trade(closed_positions):
+    """Prepare P&L data for bar chart (last 20 trades)"""
+    trades = []
+    for pos in closed_positions[-20:]:
+        ticker = pos.get("ticker", "?")
+        closed_at = pos.get("closed_at", "").split(" ")[0]
+        pnl = float(pos.get("pnl", 0)) or 0
+        trades.append({"Trade": f"{ticker} {closed_at}", "P&L £": pnl})
+
+    return pd.DataFrame(trades[::-1])  # Reverse to show oldest first
 
 def run_full_analysis(mode="Manual", market_is_open=True):
     st.session_state.analysis_running = True
@@ -402,6 +458,31 @@ with tab2:
                 col3.metric("Size", f"£{p['position_size']}")
                 col3.metric("Confidence", p["confidence"])
                 st.caption(f"Reasoning: {p['claude_reasoning']}")
+
+    st.divider()
+
+    st.subheader("📊 Performance Charts")
+
+    if closed_positions:
+        col_chart1 = st.columns(1)[0]
+        with col_chart1:
+            st.write("**Portfolio Value Over Time**")
+            portfolio_data = get_portfolio_value_over_time(closed_positions)
+            st.line_chart(portfolio_data.set_index("Date")["Portfolio Value"])
+
+        col_chart2, col_chart3 = st.columns(2)
+
+        with col_chart2:
+            st.write("**Win Rate by Confidence Tier**")
+            tier_data = get_win_rate_by_tier(closed_positions)
+            st.bar_chart(tier_data.set_index("Confidence")["Win Rate %"])
+
+        with col_chart3:
+            st.write("**P&L per Trade (Last 20)**")
+            pnl_data = get_pnl_by_trade(closed_positions)
+            st.bar_chart(pnl_data.set_index("Trade")["P&L £"])
+    else:
+        st.info("📊 Charts will appear once you close your first trade.")
 
 with tab3:
     st.subheader("Analysis Logs")
