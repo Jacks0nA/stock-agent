@@ -69,3 +69,5 @@ yfinance==1.2.0
 
 
 feedparser
+streamlit-autorefresh
+streamlit-autorefresh
