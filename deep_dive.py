@@ -31,7 +31,13 @@ def _build_options_string(options_summary):
 
 
 def run_deep_dive(ticker: str, use_enhanced_news: bool = False, market_is_open: bool = True) -> str:
+    from datetime import datetime, timezone
+
     ticker = ticker.strip().upper()
+
+    # Track that analysis is running to prevent refresh interruption
+    st.session_state.analysis_running = True
+    st.session_state.analysis_start_time = datetime.now(timezone.utc)
 
     with st.spinner(f"Fetching price data for {ticker}..."):
         df = fetch_stock_data([ticker])

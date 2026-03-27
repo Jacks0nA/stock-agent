@@ -31,6 +31,15 @@ import subprocess
 # Only auto-refresh when not running an analysis
 if "analysis_running" not in st.session_state:
     st.session_state.analysis_running = False
+if "analysis_start_time" not in st.session_state:
+    st.session_state.analysis_start_time = None
+
+# Auto-reset analysis flag after 6 minutes, then resume 60s refresh
+if st.session_state.analysis_running and st.session_state.analysis_start_time:
+    elapsed = (datetime.now(timezone.utc) - st.session_state.analysis_start_time).total_seconds()
+    if elapsed > 360:  # 6 minutes = 360 seconds
+        st.session_state.analysis_running = False
+        st.session_state.analysis_start_time = None
 
 if not st.session_state.analysis_running and autorefresh_available:
     st_autorefresh(interval=60000, key="autorefresh")
@@ -163,6 +172,7 @@ def is_market_open():
 
 def run_full_analysis(mode="Manual", market_is_open=True):
     st.session_state.analysis_running = True
+    st.session_state.analysis_start_time = datetime.now(timezone.utc)
     try:
         with st.spinner("Stage 1 — Screening assets..."):
             shortlist, market_regime = run_screen()
