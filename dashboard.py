@@ -423,6 +423,23 @@ with tab2:
             colour = "🟢" if unrealised_pct >= 0 else "🔴"
 
             with st.expander(f"{colour} {ticker} — {unrealised_pct}% (£{unrealised_gbp}) — {p['confidence']}"):
+                # Show pyramid layers if they exist
+                pyramid_layers = p.get("pyramid_layers", [])
+                if pyramid_layers:
+                    st.write("**📊 Position Layers (Pyramid):**")
+                    layers_data = []
+                    for layer in pyramid_layers:
+                        layers_data.append({
+                            "Confidence": layer.get("tier", ""),
+                            "Entry $": f"${layer.get('entry_price', 0):.2f}",
+                            "Size £": f"£{layer.get('size', 0):.0f}",
+                            "Opened": layer.get("opened_at", "")
+                        })
+                    layers_df = pd.DataFrame(layers_data)
+                    st.dataframe(layers_df, use_container_width=True, hide_index=True)
+                    st.metric("Weighted Avg Entry", f"${entry:.2f}")
+                    st.divider()
+
                 col1, col2, col3 = st.columns(3)
                 col1.metric("Entry", f"${entry}")
                 col1.metric("Current", f"${current}")
@@ -659,6 +676,60 @@ with tab5:
                 st.bar_chart(ticker_df.set_index("Ticker")["Win Rate %"])
             with col_chart2:
                 st.bar_chart(ticker_df.set_index("Ticker")["Avg P&L £"])
+
+        st.divider()
+
+        # Pyramid Performance Analysis
+        st.write("**🔺 Pyramid Performance (Confidence Scaling)**")
+
+        pyramid_stats = defaultdict(lambda: {"upgrades": 0, "stayed": 0, "downgrades": 0, "pnl": 0})
+
+        # Analyze pyramid layers in open and closed positions
+        all_positions = open_positions + closed_positions
+        for pos in all_positions:
+            if pos.get("pyramid_layers") and len(pos.get("pyramid_layers", [])) > 1:
+                # Has pyramid layers = had confidence changes
+                layers = pos["pyramid_layers"]
+                if len(layers) >= 2:
+                    for i in range(1, len(layers)):
+                        prev_tier = layers[i-1].get("tier", "")
+                        curr_tier = layers[i].get("tier", "")
+                        key = f"{prev_tier}→{curr_tier}"
+                        pyramid_stats[key]["upgrades"] += 1
+
+                        # Track if it stayed (didn't downgrade)
+                        if i == len(layers) - 1:  # Last layer
+                            pyramid_stats[key]["stayed"] += 1
+
+                        # Track P&L if closed
+                        pnl = float(pos.get("pnl", 0) or 0)
+                        if pnl != 0:
+                            pyramid_stats[key]["pnl"] += pnl
+
+        if pyramid_stats:
+            pyramid_df_data = []
+            for transition, stats_data in sorted(pyramid_stats.items()):
+                success_rate = (stats_data["stayed"] / stats_data["upgrades"] * 100) if stats_data["upgrades"] > 0 else 0
+                pyramid_df_data.append({
+                    "Transition": transition,
+                    "Upgrades": stats_data["upgrades"],
+                    "Stayed": stats_data["stayed"],
+                    "Success %": round(success_rate, 1),
+                    "Avg P&L £": round(stats_data["pnl"] / max(1, stats_data["upgrades"]), 2)
+                })
+
+            if pyramid_df_data:
+                pyramid_df = pd.DataFrame(pyramid_df_data)
+                st.dataframe(pyramid_df, use_container_width=True, hide_index=True)
+
+                st.info(
+                    "💡 Pyramid scaling shows which confidence upgrades are **real signals** vs **false positives**. "
+                    "High 'Success %' means the upgrade was justified; low % means you're over-committing to weak signals."
+                )
+            else:
+                st.info("📊 No pyramid scaling data yet. Pyramid scaling will be tracked as confidence tiers change.")
+        else:
+            st.info("📊 No pyramid scaling data yet. Pyramid scaling will be tracked as confidence tiers change.")
 
         st.divider()
 

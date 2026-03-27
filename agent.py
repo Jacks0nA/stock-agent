@@ -415,7 +415,13 @@ def execute_trade_decisions(analysis_text, historical, options_summary,
                             except ValueError:
                                 pass
                         if new_confidence and new_confidence not in ["", "unchanged"]:
-                            updates["confidence"] = new_confidence
+                            # Use pyramiding if confidence changed
+                            if new_confidence != position.get("confidence"):
+                                from portfolio import update_position_confidence_with_pyramid
+                                update_position_confidence_with_pyramid(position["id"], new_confidence, current_price)
+                                st.success(f"Pyramiding: {ticker} confidence upgraded from {position.get('confidence')} to {new_confidence}")
+                            else:
+                                updates["confidence"] = new_confidence
                         updates["current_price"] = current_price
                         if updates:
                             update_position(position["id"], updates)

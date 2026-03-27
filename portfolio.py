@@ -191,6 +191,125 @@ def update_position(position_id, updates):
     except Exception as e:
         print(f"Update position error: {e}")
 
+def get_position(position_id):
+    """Fetch a single position by ID"""
+    try:
+        url = f"{get_base_url()}/rest/v1/positions?id=eq.{position_id}"
+        response = httpx.get(url, headers=get_headers())
+        positions = response.json()
+        return positions[0] if positions else None
+    except Exception as e:
+        print(f"Get position error: {e}")
+        return None
+
+def log_pyramid_action(position_id, old_confidence, new_confidence, size_diff, entry_price):
+    """Log pyramid scaling actions for learning analytics"""
+    try:
+        import json
+        from pathlib import Path
+
+        log_file = Path("/Users/jacksonamies/stock-agent/pyramid_trades.json")
+
+        action = {
+            "timestamp": datetime.now(GMT).strftime("%Y-%m-%d %H:%M:%S"),
+            "position_id": position_id,
+            "action": "upgrade" if size_diff > 0 else "downgrade",
+            "old_confidence": old_confidence,
+            "new_confidence": new_confidence,
+            "size_change": size_diff,
+            "entry_price": entry_price
+        }
+
+        # Append to log file
+        if log_file.exists():
+            with open(log_file, 'a') as f:
+                f.write(json.dumps(action) + "\n")
+        else:
+            with open(log_file, 'w') as f:
+                f.write(json.dumps(action) + "\n")
+    except Exception as e:
+        print(f"Pyramid logging error: {e}")
+
+def update_position_confidence_with_pyramid(position_id, new_confidence, current_price):
+    """
+    Scale position up/down when confidence tier changes.
+    Upgrade: Add new layer at current price
+    Downgrade: Remove top layer (sell at current price)
+    """
+    try:
+        position = get_position(position_id)
+        if not position:
+            print(f"Position {position_id} not found")
+            return False
+
+        old_confidence = position.get("confidence")
+        if old_confidence == new_confidence:
+            return True  # No change needed
+
+        old_size = CONFIDENCE_SIZES.get(old_confidence, 0)
+        new_size = CONFIDENCE_SIZES.get(new_confidence, 0)
+        size_diff = new_size - old_size
+
+        # Initialize pyramid_layers if doesn't exist
+        pyramid_layers = position.get("pyramid_layers", [])
+        if not pyramid_layers:
+            pyramid_layers = [
+                {
+                    "tier": old_confidence,
+                    "size": old_size,
+                    "entry_price": float(position["entry_price"]),
+                    "opened_at": position.get("opened_at", datetime.now(GMT).strftime("%Y-%m-%d %H:%M"))
+                }
+            ]
+
+        if size_diff > 0:
+            # UPGRADE: Add new layer
+            pyramid_layers.append({
+                "tier": new_confidence,
+                "size": abs(size_diff),
+                "entry_price": current_price,
+                "opened_at": datetime.now(GMT).strftime("%Y-%m-%d %H:%M")
+            })
+        elif size_diff < 0:
+            # DOWNGRADE: Remove top layer(s)
+            amount_to_remove = abs(size_diff)
+            removed_layers = 0
+            while amount_to_remove > 0 and len(pyramid_layers) > 1:
+                removed_layer = pyramid_layers.pop()
+                amount_to_remove -= removed_layer["size"]
+                removed_layers += 1
+
+        # Recalculate totals
+        total_size = sum(layer["size"] for layer in pyramid_layers)
+        if total_size > 0:
+            weighted_entry = sum(
+                layer["size"] * layer["entry_price"]
+                for layer in pyramid_layers
+            ) / total_size
+        else:
+            weighted_entry = current_price
+
+        # Update position in database
+        updates = {
+            "confidence": new_confidence,
+            "position_size": total_size,
+            "entry_price": weighted_entry,
+            "pyramid_layers": pyramid_layers,
+            "current_price": current_price
+        }
+
+        update_position(position_id, updates)
+
+        # Log the pyramid action
+        log_pyramid_action(position_id, old_confidence, new_confidence, size_diff, current_price)
+
+        print(f"Pyramid scaling: {position['ticker']} {old_confidence}→{new_confidence}, size: £{old_size}→£{new_size}")
+        return True
+
+    except Exception as e:
+        print(f"Pyramid update error: {e}")
+        return False
+
 def get_current_prices(tickers):
     prices = {}
     for ticker in tickers:
