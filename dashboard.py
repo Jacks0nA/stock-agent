@@ -213,9 +213,6 @@ def run_full_analysis(mode="Manual", market_is_open=True):
         with st.spinner("Fetching technical indicators..."):
             historical = fetch_historical_data(tickers)
 
-        with st.spinner("Fetching fundamentals (P/E, analyst targets, short interest)..."):
-            fundamentals = fetch_fundamentals(tickers)
-
         with st.spinner("Checking earnings..."):
             earnings = get_earnings_calendar(tickers)
         earnings_summary = get_earnings_summary(earnings)
@@ -244,7 +241,6 @@ def run_full_analysis(mode="Manual", market_is_open=True):
                 df, news, historical, earnings,
                 market_context, insider_summary, options_summary,
                 market_is_open=market_is_open,
-                fundamentals=fundamentals,
             )
 
         st.subheader("Claude's Analysis")
@@ -262,14 +258,6 @@ try:
     git_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode().strip()
 except Exception:
     git_hash = "unknown"
-
-# Check prediction outcomes once per session — silent background task
-if "prediction_check_done" not in st.session_state:
-    try:
-        check_prediction_outcomes()
-    except Exception:
-        pass
-    st.session_state["prediction_check_done"] = True
 
 st.title("AI Stock Market Agent")
 st.caption(f"Build {git_hash} — Manual and Daily modes — Active mode coming when you start trading")
