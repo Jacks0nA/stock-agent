@@ -52,6 +52,10 @@ load_dotenv()
 
 GMT = pytz.timezone("Europe/London")
 
+def get_uk_time():
+    """Get current time in UK timezone (handles DST automatically)"""
+    return datetime.now(timezone.utc).astimezone(GMT)
+
 DAILY_WINDOWS = [
     {"name": "US Market Open", "hour": 14, "minute": 30},
     {"name": "US Midday", "hour": 18, "minute": 30},
@@ -114,11 +118,11 @@ def set_enhanced_news_setting(enabled):
 
 def get_window_key(window, date=None):
     if date is None:
-        date = datetime.now(GMT).strftime("%Y-%m-%d")
+        date = get_uk_time().strftime("%Y-%m-%d")
     return f"{date}_{window['name'].replace(' ', '_')}"
 
 def get_missed_window():
-    now = datetime.now(GMT)
+    now = get_uk_time()
     today = now.strftime("%Y-%m-%d")
     state = load_schedule_state()
     last_run = state.get("last_run_windows", {})
@@ -139,7 +143,7 @@ def get_missed_window():
     return None, None
 
 def get_next_window():
-    now = datetime.now(GMT)
+    now = get_uk_time()
     for window in DAILY_WINDOWS:
         window_time = now.replace(hour=window["hour"], minute=window["minute"], second=0, microsecond=0)
         if window_time > now:
@@ -153,13 +157,13 @@ def get_next_window():
 
 def mark_window_complete(window):
     state = load_schedule_state()
-    today = datetime.now(GMT).strftime("%Y-%m-%d")
+    today = get_uk_time().strftime("%Y-%m-%d")
     key = get_window_key(window, today)
-    state.setdefault("last_run_windows", {})[key] = datetime.now(GMT).strftime("%Y-%m-%d %H:%M")
+    state.setdefault("last_run_windows", {})[key] = get_uk_time().strftime("%Y-%m-%d %H:%M")
     save_schedule_state(state)
 
 def is_market_open():
-    now = datetime.now(GMT)
+    now = get_uk_time()
     market_open = now.replace(hour=13, minute=30, second=0, microsecond=0)
     market_close = now.replace(hour=20, minute=0, second=0, microsecond=0)
     is_weekend = now.weekday() >= 5
@@ -188,7 +192,7 @@ def get_portfolio_value_over_time(closed_positions):
     open_positions = get_open_positions()
     total_invested = sum(float(p["position_size"]) for p in open_positions) if open_positions else 0
     current_value = current_balance + total_invested
-    timeline.append({"Date": datetime.now(GMT).strftime("%Y-%m-%d"), "Portfolio Value": current_value})
+    timeline.append({"Date": get_uk_time().strftime("%Y-%m-%d"), "Portfolio Value": current_value})
 
     return pd.DataFrame(timeline)
 
@@ -329,7 +333,7 @@ enhanced_toggle = st.sidebar.toggle(
 )
 if enhanced_toggle != enhanced_news_enabled:
     set_enhanced_news_setting(enhanced_toggle)
-now_gmt = datetime.now(GMT)
+now_gmt = get_uk_time()
 st.sidebar.caption(f"Current time: {now_gmt.strftime('%H:%M GMT')}")
 
 next_window, next_time = get_next_window()
@@ -344,7 +348,7 @@ with tab1:
     if mode == "Manual":
         st.info("Manual mode — press the button to run one analysis.")
         if st.button("Run Analysis Now", type="primary"):
-            now = datetime.now(GMT)
+            now = get_uk_time()
             market_open = now.replace(hour=13, minute=30, second=0, microsecond=0)
             market_close = now.replace(hour=20, minute=0, second=0, microsecond=0)
             is_weekend = now.weekday() >= 5
@@ -363,7 +367,7 @@ with tab1:
         if missed_window:
             mins_ago = int((now_gmt - missed_time).total_seconds() / 60)
             st.warning(f"Missed window detected: {missed_window['name']} ({missed_time.strftime('%H:%M GMT')} — {mins_ago} mins ago). Running now...")
-            now_check = datetime.now(GMT)
+            now_check = get_uk_time()
             market_open_check = now_check.replace(hour=13, minute=30, second=0, microsecond=0)
             market_close_check = now_check.replace(hour=20, minute=0, second=0, microsecond=0)
             is_weekend_check = now_check.weekday() >= 5
@@ -572,7 +576,7 @@ with tab4:
         deep_dive_run = st.button("Analyse", type="primary", use_container_width=True)
 
     if deep_dive_run and deep_dive_ticker.strip():
-        now_dd = datetime.now(GMT)
+        now_dd = get_uk_time()
         market_open_dd = now_dd.replace(hour=13, minute=30, second=0, microsecond=0)
         market_close_dd = now_dd.replace(hour=20, minute=0, second=0, microsecond=0)
         is_weekend_dd = now_dd.weekday() >= 5
