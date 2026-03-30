@@ -8,6 +8,7 @@ import subprocess
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from dotenv import load_dotenv
+import pytz
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -49,7 +50,7 @@ if not st.session_state.analysis_running and autorefresh_available:
 
 load_dotenv()
 
-GMT = timezone.utc
+GMT = pytz.timezone("Europe/London")
 
 DAILY_WINDOWS = [
     {"name": "US Market Open", "hour": 14, "minute": 30},
