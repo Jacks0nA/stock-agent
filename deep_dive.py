@@ -4,6 +4,15 @@ import re
 import time
 import streamlit as st
 from dotenv import load_dotenv
+
+# Set timezone explicitly to ensure consistency across all environments
+os.environ['TZ'] = 'Europe/London'
+try:
+    import time as _time
+    _time.tzset()
+except (AttributeError, OSError):
+    # tzset() not available on all systems (e.g., Windows), but that's fine
+    pass
 from fetcher import fetch_stock_data, fetch_historical_data, fetch_fundamentals
 from news import fetch_stock_news
 from options import get_options_summary
@@ -246,7 +255,10 @@ If your verdict is WATCH or AVOID, do not output a NEW_TRADE line."""
 
                 # Execute trade if market is open — same logic as daily analysis
                 price_row = df[df["ticker"] == ticker]
-                current_price = float(price_row.iloc[0]["price"]) if not price_row.empty else None
+                if not price_row.empty:
+                    current_price = float(price_row.iloc[0]["price"])
+                else:
+                    current_price = None
                 current_prices = {ticker: current_price} if current_price else {}
                 open_positions = get_open_positions()
 

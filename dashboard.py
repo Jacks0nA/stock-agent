@@ -10,6 +10,15 @@ from collections import defaultdict
 from dotenv import load_dotenv
 import pytz
 
+# Set timezone explicitly to ensure consistency across all environments
+os.environ['TZ'] = 'Europe/London'
+try:
+    import time as _time
+    _time.tzset()
+except (AttributeError, OSError):
+    # tzset() not available on all systems (e.g., Windows), but that's fine
+    pass
+
 try:
     from streamlit_autorefresh import st_autorefresh
     autorefresh_available = True
@@ -51,16 +60,39 @@ if not st.session_state.analysis_running and autorefresh_available:
 load_dotenv()
 
 GMT = pytz.timezone("Europe/London")
+ET = pytz.timezone("America/New_York")
 
 def get_uk_time():
     """Get current time in UK timezone (handles DST automatically)"""
-    return datetime.now(timezone.utc).astimezone(GMT)
+    utc_now = datetime.now(timezone.utc)
+    # Explicitly convert UTC to Europe/London timezone
+    uk_time = utc_now.astimezone(pytz.timezone('Europe/London'))
+    return uk_time
 
-DAILY_WINDOWS = [
-    {"name": "US Market Open", "hour": 14, "minute": 30},
-    {"name": "US Midday", "hour": 18, "minute": 30},
-    {"name": "US Pre-Close", "hour": 20, "minute": 30},
-]
+def get_daily_windows():
+    """Calculate market windows dynamically based on current DST status for both UK and US"""
+    # Define US market times in ET
+    market_times_et = [
+        (9, 30, "US Market Open"),
+        (13, 30, "US Midday"),
+        (15, 30, "US Pre-Close"),
+    ]
+
+    windows = []
+    now_utc = datetime.now(timezone.utc)
+
+    for hour_et, minute_et, name in market_times_et:
+        # Create a time in ET for today
+        et_time = ET.localize(datetime(now_utc.year, now_utc.month, now_utc.day, hour_et, minute_et))
+        # Convert to UTC then to UK timezone
+        uk_time = et_time.astimezone(GMT)
+        windows.append({
+            "name": name,
+            "hour": uk_time.hour,
+            "minute": uk_time.minute,
+        })
+
+    return windows
 
 def get_headers():
     return {
@@ -126,9 +158,10 @@ def get_missed_window():
     today = now.strftime("%Y-%m-%d")
     state = load_schedule_state()
     last_run = state.get("last_run_windows", {})
+    windows = get_daily_windows()
 
     passed_windows = []
-    for window in DAILY_WINDOWS:
+    for window in windows:
         window_time = now.replace(hour=window["hour"], minute=window["minute"], second=0, microsecond=0)
         if now >= window_time:
             passed_windows.append((window, window_time))
@@ -144,16 +177,17 @@ def get_missed_window():
 
 def get_next_window():
     now = get_uk_time()
-    for window in DAILY_WINDOWS:
+    windows = get_daily_windows()
+    for window in windows:
         window_time = now.replace(hour=window["hour"], minute=window["minute"], second=0, microsecond=0)
         if window_time > now:
             return window, window_time
     tomorrow = (now + timedelta(days=1)).replace(
-        hour=DAILY_WINDOWS[0]["hour"],
-        minute=DAILY_WINDOWS[0]["minute"],
+        hour=windows[0]["hour"],
+        minute=windows[0]["minute"],
         second=0, microsecond=0
     )
-    return DAILY_WINDOWS[0], tomorrow
+    return windows[0], tomorrow
 
 def mark_window_complete(window):
     state = load_schedule_state()
@@ -162,12 +196,27 @@ def mark_window_complete(window):
     state.setdefault("last_run_windows", {})[key] = get_uk_time().strftime("%Y-%m-%d %H:%M")
     save_schedule_state(state)
 
+def get_market_times_uk(date=None):
+    """Get market open/close times in UK timezone for a given date"""
+    if date is None:
+        date = datetime.now(timezone.utc).date()
+
+    # US market hours: 09:30 - 17:00 ET
+    market_open_et = ET.localize(datetime(date.year, date.month, date.day, 9, 30))
+    market_close_et = ET.localize(datetime(date.year, date.month, date.day, 17, 0))
+
+    # Convert to UK timezone
+    market_open_uk = market_open_et.astimezone(GMT)
+    market_close_uk = market_close_et.astimezone(GMT)
+
+    return market_open_uk, market_close_uk
+
 def is_market_open():
     now = get_uk_time()
-    market_open = now.replace(hour=13, minute=30, second=0, microsecond=0)
-    market_close = now.replace(hour=20, minute=0, second=0, microsecond=0)
+    market_open_uk, market_close_uk = get_market_times_uk(now.date())
+
     is_weekend = now.weekday() >= 5
-    return not is_weekend and market_open <= now <= market_close
+    return not is_weekend and market_open_uk.replace(second=0, microsecond=0) <= now <= market_close_uk.replace(second=0, microsecond=0)
 
 def get_portfolio_value_over_time(closed_positions):
     """Reconstruct portfolio value timeline from closed positions"""
@@ -334,7 +383,8 @@ enhanced_toggle = st.sidebar.toggle(
 if enhanced_toggle != enhanced_news_enabled:
     set_enhanced_news_setting(enhanced_toggle)
 now_gmt = get_uk_time()
-st.sidebar.caption(f"Current time: {now_gmt.strftime('%H:%M GMT')}")
+tz_name = now_gmt.strftime('%Z')  # Get the actual timezone name (BST or GMT)
+st.sidebar.caption(f"Current time: {now_gmt.strftime('%H:%M')} {tz_name}")
 
 next_window, next_time = get_next_window()
 time_until = next_time - now_gmt
@@ -349,18 +399,19 @@ with tab1:
         st.info("Manual mode — press the button to run one analysis.")
         if st.button("Run Analysis Now", type="primary"):
             now = get_uk_time()
-            market_open = now.replace(hour=13, minute=30, second=0, microsecond=0)
-            market_close = now.replace(hour=20, minute=0, second=0, microsecond=0)
+            market_open, market_close = get_market_times_uk(now.date())
             is_weekend = now.weekday() >= 5
-            market_open_flag = not is_weekend and market_open <= now <= market_close
+            market_open_flag = not is_weekend and market_open.replace(second=0, microsecond=0) <= now <= market_close.replace(second=0, microsecond=0)
             if is_weekend:
                 st.warning("Markets are closed — it's the weekend. Analysis will run but no new positions will be opened.")
-            elif now < market_open or now > market_close:
+            elif now < market_open.replace(second=0, microsecond=0) or now > market_close.replace(second=0, microsecond=0):
                 st.warning("US markets are currently closed. Analysis will run but no new positions will be opened.")
             run_full_analysis(mode="Manual", market_is_open=market_open_flag)
 
     elif mode == "Daily":
-        st.info("Daily mode — auto-runs at US market open (14:30), midday (18:30), and pre-close (20:30) GMT.")
+        windows = get_daily_windows()
+        window_times = ", ".join([f"{w['name']} ({w['hour']:02d}:{w['minute']:02d})" for w in windows])
+        st.info(f"Daily mode — auto-runs at {window_times} UK time.")
 
         missed_window, missed_time = get_missed_window()
 
@@ -368,10 +419,9 @@ with tab1:
             mins_ago = int((now_gmt - missed_time).total_seconds() / 60)
             st.warning(f"Missed window detected: {missed_window['name']} ({missed_time.strftime('%H:%M GMT')} — {mins_ago} mins ago). Running now...")
             now_check = get_uk_time()
-            market_open_check = now_check.replace(hour=13, minute=30, second=0, microsecond=0)
-            market_close_check = now_check.replace(hour=20, minute=0, second=0, microsecond=0)
+            market_open_check, market_close_check = get_market_times_uk(now_check.date())
             is_weekend_check = now_check.weekday() >= 5
-            market_open_flag = not is_weekend_check and market_open_check <= now_check <= market_close_check
+            market_open_flag = not is_weekend_check and market_open_check.replace(second=0, microsecond=0) <= now_check <= market_close_check.replace(second=0, microsecond=0)
             run_full_analysis(mode=f"Daily — {missed_window['name']}", market_is_open=market_open_flag)
             mark_window_complete(missed_window)
             st.rerun()
@@ -577,10 +627,9 @@ with tab4:
 
     if deep_dive_run and deep_dive_ticker.strip():
         now_dd = get_uk_time()
-        market_open_dd = now_dd.replace(hour=13, minute=30, second=0, microsecond=0)
-        market_close_dd = now_dd.replace(hour=20, minute=0, second=0, microsecond=0)
+        market_open_dd, market_close_dd = get_market_times_uk(now_dd.date())
         is_weekend_dd = now_dd.weekday() >= 5
-        market_open_flag_dd = not is_weekend_dd and market_open_dd <= now_dd <= market_close_dd
+        market_open_flag_dd = not is_weekend_dd and market_open_dd.replace(second=0, microsecond=0) <= now_dd <= market_close_dd.replace(second=0, microsecond=0)
 
         if not market_open_flag_dd:
             st.info("US markets are currently closed — analysis will run but no position will be opened.")
