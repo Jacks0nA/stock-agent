@@ -201,9 +201,9 @@ def get_market_times_uk(date=None):
     if date is None:
         date = datetime.now(timezone.utc).date()
 
-    # US market hours: 09:30 - 17:00 ET
+    # US market hours: 09:30 - 16:00 ET
     market_open_et = ET.localize(datetime(date.year, date.month, date.day, 9, 30))
-    market_close_et = ET.localize(datetime(date.year, date.month, date.day, 17, 0))
+    market_close_et = ET.localize(datetime(date.year, date.month, date.day, 16, 0))
 
     # Convert to UK timezone
     market_open_uk = market_open_et.astimezone(GMT)
@@ -398,13 +398,12 @@ with tab1:
     if mode == "Manual":
         st.info("Manual mode — press the button to run one analysis.")
         if st.button("Run Analysis Now", type="primary"):
+            market_open_flag = is_market_open()
             now = get_uk_time()
-            market_open, market_close = get_market_times_uk(now.date())
             is_weekend = now.weekday() >= 5
-            market_open_flag = not is_weekend and market_open.replace(second=0, microsecond=0) <= now <= market_close.replace(second=0, microsecond=0)
             if is_weekend:
                 st.warning("Markets are closed — it's the weekend. Analysis will run but no new positions will be opened.")
-            elif now < market_open.replace(second=0, microsecond=0) or now > market_close.replace(second=0, microsecond=0):
+            elif not market_open_flag:
                 st.warning("US markets are currently closed. Analysis will run but no new positions will be opened.")
             run_full_analysis(mode="Manual", market_is_open=market_open_flag)
 
@@ -626,10 +625,7 @@ with tab4:
         deep_dive_run = st.button("Analyse", type="primary", use_container_width=True)
 
     if deep_dive_run and deep_dive_ticker.strip():
-        now_dd = get_uk_time()
-        market_open_dd, market_close_dd = get_market_times_uk(now_dd.date())
-        is_weekend_dd = now_dd.weekday() >= 5
-        market_open_flag_dd = not is_weekend_dd and market_open_dd.replace(second=0, microsecond=0) <= now_dd <= market_close_dd.replace(second=0, microsecond=0)
+        market_open_flag_dd = is_market_open()
 
         if not market_open_flag_dd:
             st.info("US markets are currently closed — analysis will run but no position will be opened.")
