@@ -398,6 +398,16 @@ with tab1:
             market_open_flag = is_market_open()
             now = get_uk_time()
             is_weekend = now.weekday() >= 5
+
+            # Debug info
+            with st.expander("🔍 Market Status Debug"):
+                st.write(f"Current UK time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+                market_open_uk, market_close_uk = get_market_times_uk(now.date())
+                st.write(f"Market open (UK): {market_open_uk.strftime('%H:%M:%S %Z')}")
+                st.write(f"Market close (UK): {market_close_uk.strftime('%H:%M:%S %Z')}")
+                st.write(f"Is weekend: {is_weekend}")
+                st.write(f"Market open flag: {market_open_flag}")
+
             if is_weekend:
                 st.warning("Markets are closed — it's the weekend. Analysis will run but no new positions will be opened.")
             elif not market_open_flag:
@@ -623,6 +633,16 @@ with tab4:
 
     if deep_dive_run and deep_dive_ticker.strip():
         market_open_flag_dd = is_market_open()
+        now_dd = get_uk_time()
+
+        # Debug info
+        with st.expander("🔍 Market Status Debug"):
+            st.write(f"Current UK time: {now_dd.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+            market_open_dd, market_close_dd = get_market_times_uk(now_dd.date())
+            st.write(f"Market open (UK): {market_open_dd.strftime('%H:%M:%S %Z')}")
+            st.write(f"Market close (UK): {market_close_dd.strftime('%H:%M:%S %Z')}")
+            st.write(f"Is weekend: {now_dd.weekday() >= 5}")
+            st.write(f"Market open flag: {market_open_flag_dd}")
 
         if not market_open_flag_dd:
             st.info("US markets are currently closed — analysis will run but no position will be opened.")
@@ -823,6 +843,9 @@ with tab5:
         else:
             st.success("✅ Keep trading! More data = better AI learning.")
 
-# Auto-refresh only when not running analysis — called at END of script to avoid duplicate UI
-if autorefresh_available and not st.session_state.analysis_running:
-    st_autorefresh(interval=60000, key="autorefresh")
+# Auto-refresh with dynamic interval — long interval during analysis, normal during idle
+if autorefresh_available:
+    # Use 10-minute interval if analysis running (prevents refresh during execution)
+    # Otherwise use 60-second refresh
+    interval = 600000 if st.session_state.analysis_running else 60000
+    st_autorefresh(interval=interval, key="autorefresh")

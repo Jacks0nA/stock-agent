@@ -417,6 +417,15 @@ def execute_trade_decisions(analysis_text, historical, options_summary,
     Also checks for proactive exit signals (technical flip, volatility, momentum decay).
     """
     lines = analysis_text.split("\n")
+    new_trade_lines = [l for l in lines if l.startswith("NEW_TRADE:")]
+
+    # Debug: show if NEW_TRADE lines were found
+    if new_trade_lines:
+        st.info(f"🔍 Found {len(new_trade_lines)} trade signal(s). Market open: {market_is_open}")
+        for trade_line in new_trade_lines:
+            st.caption(f"Trade signal: {trade_line[:80]}")
+    else:
+        st.caption("ℹ️ No NEW_TRADE signals in analysis")
 
     open_position_map = {p["ticker"]: p for p in open_positions}
 
