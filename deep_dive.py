@@ -21,7 +21,10 @@ from earnings import get_earnings_calendar, get_earnings_summary
 from sectors import get_market_context, get_market_summary
 from prediction_tracker import save_prediction, get_accuracy_summary
 from agent import execute_trade_decisions
-from portfolio import get_open_positions, get_current_prices, get_closed_positions
+from portfolio import (
+    get_open_positions, get_current_prices, get_closed_positions,
+    check_stop_losses, check_max_hold, check_50_percent_targets, check_quick_loser_exits
+)
 from trade_analyzer import analyze_closed_positions, get_playbook_context_for_claude
 
 load_dotenv()
@@ -284,6 +287,15 @@ If score is under 11 or missing confirmers: Output WATCH (not BUY)."""
                     current_price = None
                 current_prices = {ticker: current_price} if current_price else {}
                 open_positions = get_open_positions()
+
+                # Auto-manage open positions (SMART STRATEGY)
+                if open_positions and current_prices:
+                    check_50_percent_targets(open_positions, current_prices)
+                    check_stop_losses(open_positions, current_prices)
+                    check_quick_loser_exits(open_positions, current_prices)
+                    check_max_hold(open_positions, current_prices)
+                    # Refresh after auto-closures
+                    open_positions = get_open_positions()
 
                 execute_trade_decisions(
                     result, historical, options_summary,

@@ -1,79 +1,88 @@
-# AI Learning Acceleration Guide - Step by Step
+# AI Learning Acceleration Guide - Fully Autonomous
 
 ## Your Role (What YOU Do)
 
-### **DAILY (5 minutes)**
-1. ✅ Run analysis (Manual or Daily mode)
-2. ✅ Review Claude's suggestions
-3. ✅ Open trades that meet your conviction (or skip if NO_TRADE)
-4. ✅ Check portfolio for positions to exit
+### **Daily: Just Monitor** (2 minutes)
+1. ✅ Let Claude run analysis automatically
+2. ✅ Watch the trades execute
+3. ✅ Review Learning tab occasionally to see what's working
 
-### **EVERY 2-3 DAYS (3 minutes)**
-1. ✅ Close any positions at 50% target
-   - These are your LEARNING CYCLES
-   - More closed positions = faster learning
-   - Don't hold for full target anymore
+**That's it. Everything else is automatic.**
 
-2. ✅ Exit losers early (don't let them sit)
-   - Max 4 days in position, exit on stop loss hit
-   - Clears capital for new trades
-
-### **WEEKLY (10 minutes)**
-1. ✅ Check Learning tab
+### **Weekly: Check Results** (5 minutes)
+1. ✅ Review Learning tab
    - See what signals are working
-   - Review top predictors
-   - Note which assets are winning
+   - Check win rate (should be 65%+)
+   - Note top predictive signals
 
-2. ✅ Rotate sectors
-   - Week 1: XLK, XLF, XLV
-   - Week 2: XLE, XLI, XLU
-   - Week 3: XLY, XLB
-   - (Ensures diverse learning)
+2. ✅ Look at closed positions
+   - How many closed this week?
+   - What was the win rate?
+   - Which assets performed?
 
-3. ✅ Review closed positions
-   - Count how many you closed this week
-   - Target: 2-3 closed per week (not opened, closed)
-
-### **MONTHLY (15 minutes)**
-1. ✅ Check metrics in Learning tab
-   - Win rate (should be 65%+)
+### **Monthly: Full Review** (10 minutes)
+1. ✅ Check Learning tab metrics
+   - Win rate trend
    - Avg winner/loser
-   - Top predictive signals
+   - Top signals
+   - Best performing assets
 
-2. ✅ Look at trade history
-   - Which confidence tiers won most?
-   - Which sectors performed?
-   - Which patterns showed up in winners?
+2. ✅ Look at trading history
+   - Which confidence tiers worked?
+   - Which sectors dominated?
+   - Which patterns appear in winners?
 
 ---
 
-## System's Role (What HAPPENS AUTOMATICALLY)
+## System's Role (FULLY AUTOMATED)
 
 ### **EVERY ANALYSIS RUN**
-- Screens all stocks (uses cache if available)
-- Generates learned playbook from closed trades
-- Claude reviews your open positions
-- Claude suggests only HIGH-QUALITY new trades (or NO_TRADE)
-- Executes trades that meet criteria
-- Shows you the playbook it's using
+- ✅ Screens all stocks (uses cache if available)
+- ✅ Generates learned playbook from closed trades
+- ✅ Reviews open positions
+- ✅ **AUTOMATICALLY CLOSES positions at 50% target** ← Accelerates learning
+- ✅ **AUTOMATICALLY EXITS losers** after 3 days ← Frees capital
+- ✅ Suggests only HIGH-QUALITY new trades (or NO_TRADE)
+- ✅ Opens trades automatically if criteria met
+- ✅ Shows learning dashboard
 
-### **EVERY CLOSED POSITION**
-- Updates balance automatically
-- Records all trade details
-- Learning system analyzes the data
-- AI learns which signals predicted the win/loss
+### **CONTINUOUSLY (Background)**
+- ✅ Monitors all open positions for exits
+- ✅ Updates balance on every trade
+- ✅ Records all position details
+- ✅ Learning system analyzes every closed trade
+- ✅ AI learns which signals predicted wins/losses
 
-### **EVERY WEEK**
+### **AUTOMATIC EXIT RULES (Running Every Analysis)**
+1. **50% Target Exits** (SMART STRATEGY)
+   - Locks in gains early
+   - Increases closed trade count
+   - Speeds up learning cycles
+
+2. **Stop Loss Exits** (ALWAYS)
+   - Risk management built in
+   - Never holds below stop
+
+3. **Quick Loser Exits** (SMART STRATEGY)
+   - Exits after 3 days if still negative
+   - Frees capital for new trades
+   - Prevents holding garbage
+
+4. **Max Hold Exits** (10 days default)
+   - Time-based exit
+   - Prevents indefinite holds
+
+### **WEEKLY**
 - Phase advancement (Week 1 = Phase 1, Week 2 = Phase 2, etc.)
 - Signal effectiveness updates
 - Pattern recognition improves
-- Learning dashboard refreshes
+- Learning dashboard auto-refreshes
 
 ### **EVERY 2 MONTHS**
 - Complete AI model trained
 - Dynamic rules learned from YOUR trades
 - Personalized playbook locked in
-- Ready for high-accuracy trading
+- 70%+ accuracy achieved
 
 ---
 

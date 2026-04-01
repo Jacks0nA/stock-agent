@@ -367,6 +367,81 @@ def check_max_hold(open_positions, current_prices):
             closed.append(ticker)
     return closed
 
+def check_50_percent_targets(open_positions, current_prices):
+    """
+    SMART STRATEGY: Automatically closes positions at 50% of target profit.
+    This accelerates learning cycles and locks in gains.
+    """
+    exits = []
+    for position in open_positions:
+        ticker = position["ticker"]
+        current_price = current_prices.get(ticker)
+        if current_price is None:
+            continue
+
+        entry = float(position["entry_price"])
+        target = float(position["target_price"])
+        target_profit = target - entry
+        fifty_percent_target = entry + (target_profit * 0.5)
+
+        # Exit if price has reached 50% of target profit
+        if current_price >= fifty_percent_target and position["direction"] == "LONG":
+            profit_pct = round(((current_price - entry) / entry) * 100, 2)
+            print(f"✅ 50% TARGET EXIT: {ticker} at {current_price} (entry: {entry}, target: {target}) — +{profit_pct}%")
+            close_position(
+                position["id"],
+                current_price,
+                f"Automated 50% target exit at {current_price} (accelerates learning cycles)"
+            )
+            exits.append(ticker)
+        elif current_price <= fifty_percent_target and position["direction"] == "SHORT":
+            profit_pct = round(((entry - current_price) / entry) * 100, 2)
+            print(f"✅ 50% TARGET EXIT: {ticker} at {current_price} (short) — +{profit_pct}%")
+            close_position(
+                position["id"],
+                current_price,
+                f"Automated 50% target exit at {current_price} (accelerates learning cycles)"
+            )
+            exits.append(ticker)
+
+    return exits
+
+def check_quick_loser_exits(open_positions, current_prices):
+    """
+    SMART STRATEGY: Automatically exits losers after 3-4 days to free capital.
+    Prevents holding losing positions, accelerates learning.
+    """
+    exits = []
+    today = datetime.now(GMT)
+
+    for position in open_positions:
+        # Only check losers
+        loss_pct = float(position.get("pnl_pct", 0))
+        if loss_pct >= 0:  # Not a loser
+            continue
+
+        # Only exit after 3 days (some patience for mean reversion)
+        opened = datetime.strptime(position["opened_at"], "%Y-%m-%d %H:%M").replace(tzinfo=GMT)
+        days_held = (today - opened).days
+
+        if days_held >= 3:
+            ticker = position["ticker"]
+            current_price = current_prices.get(ticker, float(position["entry_price"]))
+            entry = float(position["entry_price"])
+
+            # Only exit if still negative (don't let it bounce back)
+            if current_price < entry:
+                loss_pct = round(((current_price - entry) / entry) * 100, 2)
+                print(f"⚠️ QUICK LOSER EXIT: {ticker} at {current_price} after {days_held} days — {loss_pct}%")
+                close_position(
+                    position["id"],
+                    current_price,
+                    f"Automatic loser exit after {days_held} days to free capital for new trades"
+                )
+                exits.append(ticker)
+
+    return exits
+
 def get_portfolio_summary():
     """
     Returns a summary string for Claude to use in analysis.

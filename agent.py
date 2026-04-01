@@ -10,8 +10,8 @@ from sectors import get_market_summary
 from portfolio import (
     get_portfolio_summary, get_open_positions, get_current_prices,
     open_position, close_position, update_position,
-    check_stop_losses, check_max_hold, get_portfolio_balance,
-    get_closed_positions, MAX_POSITIONS, CONFIDENCE_SIZES
+    check_stop_losses, check_max_hold, check_50_percent_targets, check_quick_loser_exits,
+    get_portfolio_balance, get_closed_positions, MAX_POSITIONS, CONFIDENCE_SIZES
 )
 from trade_analyzer import analyze_closed_positions, get_playbook_context_for_claude
 
@@ -215,15 +215,20 @@ def analyse_stocks(df, news, historical, earnings, market_context,
     fundamentals_string = build_fundamentals_string(fundamentals)
     portfolio_summary = get_portfolio_summary()
 
-    # Check stop losses and max hold before analysis
+    # Auto-manage positions before analysis (SMART STRATEGY)
     open_positions = get_open_positions()
     if open_positions:
         position_tickers = [p["ticker"] for p in open_positions]
         all_tickers = list(set(tickers + position_tickers))
         current_prices = get_current_prices(all_tickers)
-        check_stop_losses(open_positions, current_prices)
-        check_max_hold(open_positions, current_prices)
-        # Refresh after auto-closures
+
+        # Exit positions (in order of priority)
+        check_50_percent_targets(open_positions, current_prices)  # Lock in gains first
+        check_stop_losses(open_positions, current_prices)         # Stop losses always
+        check_quick_loser_exits(open_positions, current_prices)   # Free capital from losers
+        check_max_hold(open_positions, current_prices)            # Time-based exits
+
+        # Refresh positions after auto-closures
         open_positions = get_open_positions()
     else:
         current_prices = get_current_prices(tickers)
