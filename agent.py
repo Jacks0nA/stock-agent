@@ -11,8 +11,9 @@ from portfolio import (
     get_portfolio_summary, get_open_positions, get_current_prices,
     open_position, close_position, update_position,
     check_stop_losses, check_max_hold, get_portfolio_balance,
-    MAX_POSITIONS, CONFIDENCE_SIZES
+    get_closed_positions, MAX_POSITIONS, CONFIDENCE_SIZES
 )
+from trade_analyzer import analyze_closed_positions, get_playbook_context_for_claude
 
 from prediction_tracker import get_accuracy_summary
 
@@ -235,6 +236,11 @@ def analyse_stocks(df, news, historical, earnings, market_context,
     available_slots = MAX_POSITIONS - len(open_positions)
     balance = get_portfolio_balance()
 
+    # Generate learned playbook from historical trades
+    closed_positions = get_closed_positions()
+    trade_analysis = analyze_closed_positions(closed_positions) if closed_positions else {}
+    playbook_context = get_playbook_context_for_claude(trade_analysis)
+
     for attempt in range(3):
         try:
             message = client.messages.create(
@@ -258,6 +264,9 @@ PREDICTION HISTORY:
 {prediction_accuracy}
 
 MEMORY: {memory_summary}
+
+YOUR LEARNED PLAYBOOK (Trading patterns that work):
+{playbook_context}
 
 FUNDAMENTALS:
 {fundamentals_string}

@@ -21,7 +21,8 @@ from earnings import get_earnings_calendar, get_earnings_summary
 from sectors import get_market_context, get_market_summary
 from prediction_tracker import save_prediction, get_accuracy_summary
 from agent import execute_trade_decisions
-from portfolio import get_open_positions, get_current_prices
+from portfolio import get_open_positions, get_current_prices, get_closed_positions
+from trade_analyzer import analyze_closed_positions, get_playbook_context_for_claude
 
 load_dotenv()
 
@@ -140,6 +141,11 @@ def run_deep_dive(ticker: str, use_enhanced_news: bool = False, market_is_open: 
     market_summary = get_market_summary(market_context)
     prediction_accuracy = get_accuracy_summary()
 
+    # Generate learned playbook from historical trades
+    closed_positions = get_closed_positions()
+    trade_analysis = analyze_closed_positions(closed_positions) if closed_positions else {}
+    playbook_context = get_playbook_context_for_claude(trade_analysis)
+
     with st.spinner(f"Claude running deep dive on {ticker}..."):
         for attempt in range(3):
             try:
@@ -177,6 +183,9 @@ EARNINGS:
 
 YOUR PAST PREDICTION ACCURACY:
 {prediction_accuracy}
+
+YOUR LEARNED PLAYBOOK (Trading patterns that work):
+{playbook_context}
 
 ---
 
