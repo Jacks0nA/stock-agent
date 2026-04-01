@@ -389,6 +389,13 @@ hours_until = int(time_until.total_seconds() // 3600)
 mins_until = int((time_until.total_seconds() % 3600) // 60)
 st.sidebar.info(f"Next window: {next_window['name']}\n{next_time.strftime('%H:%M GMT')} — in {hours_until}h {mins_until}m")
 
+# Set auto-refresh interval BEFORE rendering tabs
+# This ensures the interval is set before any analysis starts
+if autorefresh_available:
+    # Use 10-minute interval if analysis running, else 60-second refresh
+    interval = 600000 if st.session_state.analysis_running else 60000
+    st_autorefresh(interval=interval, key="autorefresh")
+
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["Analysis", "Portfolio", "Logs", "Deep Dive", "Learning"])
 
 with tab1:
@@ -842,10 +849,3 @@ with tab5:
                 st.info(rec)
         else:
             st.success("✅ Keep trading! More data = better AI learning.")
-
-# Auto-refresh with dynamic interval — long interval during analysis, normal during idle
-if autorefresh_available:
-    # Use 10-minute interval if analysis running (prevents refresh during execution)
-    # Otherwise use 60-second refresh
-    interval = 600000 if st.session_state.analysis_running else 60000
-    st_autorefresh(interval=interval, key="autorefresh")
