@@ -12,7 +12,7 @@
 ### **Weekly: Check Results** (5 minutes)
 1. ✅ Review Learning tab
    - See what signals are working
-   - Check win rate (should be 65%+)
+   - Check win rate (target 55%+, 60%+ is excellent)
    - Note top predictive signals
 
 2. ✅ Look at closed positions
@@ -79,10 +79,10 @@
 - Learning dashboard auto-refreshes
 
 ### **EVERY 2 MONTHS**
-- Complete AI model trained
+- Complete AI model trained on 40-50 closed trades
 - Dynamic rules learned from YOUR trades
 - Personalized playbook locked in
-- 70%+ accuracy achieved
+- 60-65% accuracy target (realistic, professional-grade edge)
 
 ---
 
@@ -138,16 +138,16 @@ MAXIMIZE:
 
 ---
 
-## Weekly Targets (To Stay on Pace)
+## Weekly Targets (Realistic Pace)
 
 | Metric | Target | Why |
 |--------|--------|-----|
-| **Closed positions/week** | 2-3 | 50+ by end of 2 months |
-| **New trade suggestions** | 2-3 | Quality > quantity |
-| **NO_TRADE days** | 1-2 | Shows discipline |
-| **Win rate** | 65%+ | Should be high with Smart Strategy |
-| **Avg hold time** | 3-5 days | 50% target exits |
-| **Different sectors** | 2-3 per week | Rotation for diversity |
+| **Closed positions/week** | 2-3 | 40-50 by end of 2 months = good sample size |
+| **New trade suggestions** | 2-3 | Quality > quantity; filtering works |
+| **NO_TRADE days** | 1-2 | Shows discipline; bad setups filtered out |
+| **Win rate** | 55%+ | Realistic; 60%+ is excellent |
+| **Avg hold time** | 3-5 days | 50% target exits manage capital well |
+| **Different sectors** | 2-3 per week | Rotation teaches system diversity |
 
 ---
 
@@ -252,16 +252,16 @@ Exit at 50% target? ☐ Yes ☐ No ☐ N/A
 ### **Weekly Metric**
 ```
 Closed positions this week: _____ (target: 2-3)
-Win rate this week: ____% (target: 65%+)
+Win rate this week: ____% (target: 55%+ is good, 60%+ is excellent)
 NEW signals learned: _____________
 ```
 
 ### **Monthly Metric**
 ```
-Total closed positions: _____ (should be 8-12)
-Win rate month-to-date: ____% (should be 65%+)
+Total closed positions: _____ (should be 8-12 to build sample size)
+Win rate month-to-date: ____% (target: 55%+, trending toward 60%+)
 Top predictive signal: _____________
-Fastest learning phase so far: _______
+Is win rate improving week-over-week? (even +1% is progress)
 ```
 
 ---
@@ -326,11 +326,12 @@ Fastest learning phase so far: _______
 WEEK ____ SUMMARY
 ==================
 Closed positions: ____ (target: 2-3)
-Win rate: ____%     (target: 65%+)
-Avg winner: ____%   (target: +1.5%+)
-Avg loser: ____%    (target: -0.6% or better)
+Win rate: ____%     (target: 55%+, 60%+ is excellent)
+Avg winner: ____%   (target: +1.0-1.5%)
+Avg loser: ____%    (target: -0.8-1.0%)
 Sectors traded: ________________
 Top winning signal: _____________
+Is it improving vs last week? ____
 Next week focus: ________________
 ```
 
@@ -346,9 +347,10 @@ Next week focus: ________________
    - No → Force it next week (this is critical)
    - Yes → Perfect
 
-3. **Is win rate 65%+?**
-   - No → May need tighter entry criteria
-   - Yes → On track
+3. **Is win rate 55%+?**
+   - No → Review recent trades, may need tighter criteria
+   - Yes → Good, on track
+   - 60%+ → Excellent, system learning well
 
 4. **Am I rotating sectors?**
    - No → Start this week
@@ -362,10 +364,13 @@ Next week focus: ________________
 
 ## The Bottom Line
 
-**You:** 5-10 min/day, disciplined exits, sector rotation
-**System:** Everything else (learns, adapts, improves)
-**Result:** From 50% accuracy → 70%+ in 2 months
+**You:** 2 min/day monitoring, system does everything
+**System:** Opens trades, closes at 50% target, exits losers, learns patterns
+**Realistic Result:** 50% baseline → 55-60% win rate by end of Month 2
 
-Just execute the daily checklist. The AI does the learning.
+This is a hard problem. 60%+ is professional-grade edge.
+But with 40-50 closed trades of data, you'll know what works FOR YOU specifically.
 
-🚀 Let's go.
+Just monitor the dashboard. The AI does the learning.
+
+🚀 Let's build this right (not fast).

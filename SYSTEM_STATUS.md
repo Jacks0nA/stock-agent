@@ -65,19 +65,21 @@ DEEP DIVE CYCLE:
 
 ---
 
-## Expected Learning Timeline
+## Expected Learning Timeline (Realistic)
 
 | Phase | Week | Closed Trades | Win Rate | Key Learning |
 |-------|------|---------------|----------|--------------|
-| 1 | W1 | 2-3 | ~50% | Which confidence tiers work |
-| 2 | W2 | 4-5 | ~55% | Which score thresholds best |
-| 3 | W3 | 6-8 | ~60% | Signal combinations |
-| 4 | W4 | 8-10 | ~65% | Market regime adaptation |
-| 5-6 | W5-6 | 12-15 | ~70% | Pattern recognition |
-| 7-8 | W7-8 | 20+ | ~70% | Dynamic rule learning |
-| 9-12 | W9-12 | 40-50+ | 75%+ | Personalized per-ticker strategies |
+| 1 | W1 | 2-3 | ~50% | Establish baseline, which confidence tiers work |
+| 2 | W2 | 4-5 | ~50-52% | Which score thresholds filter out losers |
+| 3 | W3 | 6-8 | ~55% | Early signal combination patterns |
+| 4 | W4 | 8-10 | ~55-58% | Market regime recognition starting |
+| 5-6 | W5-6 | 12-15 | ~58-60% | Consistent pattern matching |
+| 7-8 | W7-8 | 20+ | ~60% | Stable edge emerging |
+| 9-12 | W9-12 | 40-50+ | 60-65% | Refined rules, per-ticker tuning |
 
-**Month 2 onwards:** System runs with 70%+ accuracy, fully learned edge.
+**Realistic Goal:** 60-65% win rate by end of Month 2 (professional standard)
+**Best Case:** 65%+ if signals are strong for your market/style
+**Honest Assessment:** Building a +55% edge is already beating the market; 60%+ is excellent
 
 ---
 
@@ -94,12 +96,13 @@ When positions meet multiple exit criteria:
 
 ## Key Metrics to Monitor Weekly
 
-- [ ] **Closed positions:** Target 2-3/week (8-12/month)
-- [ ] **Win rate:** Target 65%+ (should be higher with Smart Strategy)
-- [ ] **Avg winner:** Target +1.8-2.2%
-- [ ] **Avg loser:** Target -0.5-0.6%
+- [ ] **Closed positions:** Target 2-3/week (8-12/month) — data for learning
+- [ ] **Win rate:** Target 55%+ (realistic), 60%+ is excellent
+- [ ] **Avg winner:** Target +1.0-1.5%
+- [ ] **Avg loser:** Target -0.8-1.0%
 - [ ] **Exit discipline:** Are positions exiting at ~50% target? ✅
 - [ ] **Sector diversity:** 2-3 different sectors per week? ✅
+- [ ] **Trend:** Is win rate improving week-over-week? (even +1% is progress)
 
 ---
 
@@ -144,14 +147,16 @@ dashboard.py
 
 The system will automatically implement these learning phases:
 
-1. **Phase 1:** Signal effectiveness scoring (which signals predict wins?)
+1. **Phase 1:** Signal effectiveness scoring (which signals actually predict wins?)
 2. **Phase 2:** Dynamic confidence thresholds (what score level works best?)
 3. **Phase 3:** Signal combination analysis (which signal pairs are strongest?)
 4. **Phase 4:** Market condition segmentation (different rules for bull/bear/VIX?)
-5. **Phases 5-8:** Pattern tracking, correlation analysis, dynamic rule adaptation
-6. **Phases 9-12:** Per-ticker personalization, final accuracy tuning
+5. **Phases 5-8:** Pattern tracking, correlation analysis, dynamic rule refinement
+6. **Phases 9-12:** Per-ticker tuning, regime-specific adaptations
 
-By end of Month 2: 70%+ win rate, fully learned personalized strategy.
+**Realistic End State:** 60-65% win rate with clear, reproducible edge
+**Data-Driven:** Every improvement backed by 40-50 closed position samples
+**Your Edge:** System learns YOUR specific signals that actually work
 
 ---
 
@@ -159,6 +164,7 @@ By end of Month 2: 70%+ win rate, fully learned personalized strategy.
 
 All autonomous features implemented, tested, and integrated.
 System will learn and improve automatically over the next 2 months.
-User role: Monitor and celebrate wins.
+Realistic goal: Build 60%+ win rate edge from real trading data.
+User role: Monitor and let the system work.
 
-🚀 Go time!
+🚀 Go time! (And good luck — this is hard, but doable.)

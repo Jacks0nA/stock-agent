@@ -84,9 +84,9 @@ Every closed position teaches the system:
 - ✅ Did this hold time work? (3 days vs 5 days vs 10 days)
 - ✅ Which entry conditions led to profits?
 
-**By week 4:** System adapts to what's working
-**By week 8:** System recognizes market regimes (bull/bear/VIX)
-**By week 12:** System has personalized per-ticker rules with 70%+ accuracy
+**By week 4:** System recognizes what's working, win rate trending up
+**By week 8:** System adapts to market regimes, 55-60% win rate
+**By week 12:** System fine-tuned with 40-50 trade samples, 60-65% win rate
 
 ---
 
@@ -95,10 +95,10 @@ Every closed position teaches the system:
 ### Check These Numbers
 
 **Portfolio Status:**
-- [ ] How many positions closed this week?
-- [ ] What was win rate? (target: 65%+)
-- [ ] Avg winner size? (target: +1.5%+)
-- [ ] Avg loser size? (target: -0.5% or better)
+- [ ] How many positions closed this week? (target: 2-3)
+- [ ] What was win rate? (target: 55%+, 60%+ is excellent)
+- [ ] Avg winner size? (target: +1.0-1.5%)
+- [ ] Avg loser size? (target: -0.8-1.0%)
 
 **Closed Positions Details:**
 - [ ] Click "View All Closed Positions"
@@ -114,28 +114,28 @@ Every closed position teaches the system:
 
 ## Monthly Review (10 minutes, end of month)
 
-### Track Acceleration
+### Track Performance (Realistic Targets)
 
 | Metric | Target | Your Result |
 |--------|--------|------------|
 | Closed positions | 8-12 | _____ |
-| Win rate | 65%+ | _____ |
-| Avg winner | +1.8%+ | _____ |
-| Avg loser | -0.6% or better | _____ |
-| Sharpe ratio trend | → | _____ |
+| Win rate | 55%+ | _____ |
+| Avg winner | +1.0-1.5% | _____ |
+| Avg loser | -0.8-1.0% | _____ |
+| Improving trend? | Week-over-week | _____ |
 
 ### Month 1 Checklist
-- [ ] At least 8 closed trades (learning fuel)
-- [ ] 50%+ win rate (baseline establishment)
-- [ ] Clear winners/losers emerging (signal validation)
-- [ ] 2-3 different sectors traded (diversity)
+- [ ] At least 8 closed trades (build sample size)
+- [ ] 55%+ win rate (reasonable baseline)
+- [ ] Some patterns emerging (what works for you?)
+- [ ] 2-3 different sectors traded (learning diversity)
 
 ### Month 2 Checklist
-- [ ] 16-20 closed trades total (doubling learning data)
-- [ ] 65%+ win rate (system learning)
-- [ ] Avg winner 1.8%+ (edge emerging)
-- [ ] Recognizable patterns (system adaptation)
-- [ ] Month 2 expected: 70%+ accuracy
+- [ ] 16-20 closed trades total (solid learning sample)
+- [ ] 55-60% win rate (system adapting)
+- [ ] Clear winning/losing signal patterns
+- [ ] Recognizable sectors that work for you
+- [ ] Goal: 60-65% accurate, data-driven edge
 
 ---
 
@@ -175,8 +175,8 @@ A: Good! Means criteria are working. Score <11 setups often fail. Better to skip
 **Q: A position exited at max hold (10 days) with small loss — was this wrong?**
 A: No, it's capital hygiene. Prevents capital lockup. Small losses are okay for the learning.
 
-**Q: Why hasn't win rate hit 65% yet?**
-A: Week 1-2 is baseline establishment. Week 3+ accelerates. By week 4 should see improvement.
+**Q: Why is win rate only 50-55%?**
+A: Week 1-2 is baseline. By week 4, should trend toward 55-60%. 60%+ takes 8+ weeks of learning. Building a real edge is hard.
 
 ---
 
@@ -191,10 +191,10 @@ A: Week 1-2 is baseline establishment. Week 3+ accelerates. By week 4 should see
 - [ ] Win rate trending up week-to-week
 
 ### 🟡 **Yellow Flags** (Monitor closely)
-- Only 1 closed trade per week (not hitting targets?)
-- Win rate stuck at 50% (signals not working?)
-- Same sector repeatedly (not rotating?)
-- Long hold times (not exiting at 50% target?)
+- Only 1 closed trade per week (targets not hitting, market slow?)
+- Win rate stuck at 50% after week 4 (signals may need review)
+- Same sector repeatedly (not rotating, reduces learning)
+- Long hold times (not exiting at 50% target, check mechanics)
 
 ### 🔴 **Red Flags** (Needs investigation)
 - 0 closed trades in a week (system not opening?)
@@ -206,15 +206,17 @@ A: Week 1-2 is baseline establishment. Week 3+ accelerates. By week 4 should see
 
 ## The Big Picture
 
-**Your job:** Monitor and celebrate wins
+**Your job:** Monitor (2 min/day), don't interfere
 **System's job:** Learn, adapt, improve
 
 By following this simple workflow, the AI will:
-- Analyze 50+ trades in 8 weeks
-- Learn which signals work in your favor
+- Collect 40-50 trade samples in 8 weeks
+- Learn which signals actually predict wins (for YOUR edge)
 - Adapt to market conditions
-- Build a personalized 70%+ accuracy model
+- Build a personalized 60-65% accuracy model
+
+That's professional-grade. Most professional traders struggle to hit 55%.
 
 Just keep the dashboard open, check it 2 minutes a day, and let the system learn.
 
-🚀 That's it. Go make money!
+🚀 Build the edge right (not fast).
