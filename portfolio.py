@@ -50,7 +50,7 @@ def set_portfolio_balance(balance):
         httpx.post(url, headers=get_headers(), json={
             "key": "balance",
             "value": str(balance)
-        }).execute()
+        })
     except Exception as e:
         print(f"Balance set error: {e}")
 
@@ -114,7 +114,8 @@ def open_position(ticker, direction, entry_price, target_price, stop_loss,
             "value": str(new_balance)
         })
 
-        print(f"Opened {direction} position in {ticker} — size £{position_size} — confidence {confidence}")
+        print(f"✅ Opened {direction} position in {ticker} — size £{position_size} — confidence {confidence}")
+        print(f"   Balance: £{balance:.2f} → £{new_balance:.2f}")
         return True
 
     except Exception as e:
@@ -159,7 +160,8 @@ def close_position(position_id, exit_price, reason):
             "value": str(new_balance)
         })
 
-        print(f"Closed {position['ticker']} at £{exit_price} — P&L: £{round(pnl, 2)} ({round(pnl_pct, 2)}%)")
+        print(f"✅ Closed {position['ticker']} at £{exit_price} — P&L: £{round(pnl, 2)} ({round(pnl_pct, 2)}%)")
+        print(f"   Balance: £{balance:.2f} → £{new_balance:.2f} (returned £{round(return_amount, 2)})")
         return pnl
 
     except Exception as e:
