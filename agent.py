@@ -294,40 +294,90 @@ Rules you must follow:
 - Exit if stop loss breached (already handled automatically)
 - Maximum 10 days hold (already handled automatically)
 
-AGGRESSIVE EXIT RULES (lock in wins early):
-- Exit at 50% of target profit (capture half, let other half run)
-- Exit if RSI reverses from overbought (>70 → <60) without new highs
-- Exit if volume dies (drops below 20-day avg) — losing institutional support
-- Exit if position has 5+ days of flat/sideways action — mean reversion complete
-- Exit if sector turns negative and stock hasn't outperformed (sector rotation)
+AGGRESSIVE EXIT RULES (CRITICAL for AI learning):
+- **EXIT AT 50% TARGET (PRIMARY RULE)**
+  Example: Entry 100, target 110, exit at 105 (50% of 10-point move)
+  This locks in gains, increases learning cycles (more closed trades = faster learning)
+  Let other 50% run if momentum continues
+
+- Exit immediately if RSI reverses from overbought (>70 → <60) without new highs
+  Signal: Momentum failed, mean reversion done
+
+- Exit if volume dies below 20-day average for 2+ days
+  Signal: Institutional conviction gone
+
+- Exit if position flat/sideways for 5+ days
+  Signal: Mean reversion complete, time to redeploy capital
+
+- Exit if sector turns negative and stock hasn't outperformed
+  Signal: Sector rotation, even if stock still up
 
 For each open position output:
 POSITION_REVIEW: [TICKER] | [HOLD/EXIT] | [NEW_TARGET if changed] | [NEW_STOP if changed] | [NEW_CONFIDENCE] | [REASONING]
 
-PART 2 — NEW TRADE DECISIONS:
+PART 2 — NEW TRADE DECISIONS (QUALITY OVER QUANTITY STRATEGY):
+
+**CRITICAL: The goal is 50-70 HIGH-QUALITY closed trades over 2 months for AI learning.**
+**Better to make 2 excellent trades/week than 10 mediocre ones.**
+
 Available portfolio slots: {available_slots}
 Available cash: £{round(balance, 2)}
 
-STRICT FILTERS (must pass ALL):
-1. Risk/Reward: Minimum 2:1 ratio (target is 2x below stop loss distance)
-2. Sector Rotation: Only trade in STRONGEST sectors (check sector RSI vs overall market)
-3. Options Confirmation: CONFIDENT tier requires bullish options flow (calls > puts, significant volume)
-4. No earnings trades: Skip any within 5 days of earnings
-5. Trend confirmation: Price must be above both MA20 AND MA50 for LONGS
+🔥 ULTRA-SELECTIVE ENTRY CRITERIA (ALL must pass):
 
-Confidence tiers and position sizes:
-- SUPER (£2000): Only if 2:1+ risk/reward AND strong options + insider + technical trifecta
-- CONFIDENT (£1000): 2:1+ risk/reward AND bullish options flow (£1M+ calls zero puts)
-- MEDIUM (£250): 2:1+ risk/reward AND technical + one confirmer (no options required)
-- LOW (£100): Only for extreme oversold (RSI <25) with support
+1. **SCORE THRESHOLD: 11+ minimum** (not 10)
+   - Only suggest score 11-13 or higher
+   - Skip anything below 11, no exceptions
 
-Only open a position if you genuinely believe in the setup.
-It is always better to say NO TRADE than to force a low quality setup.
+2. **CONFIRMERS: 2+ STRONG signals required**
+   - Strong signals: RSI divergence, insider buying, bullish options £1M+, support hold
+   - Weak signals: Above MA20, volume ratio >1.5x (these alone aren't enough)
 
-For each new trade output:
+3. **Risk/Reward: Strict 2:1 minimum**
+   - Target must be 2x the distance below stop loss
+   - Example: Stop at 100, Target at 110, Risk = 10, Reward = 20 ✓
+
+4. **Sector Filter: Only STRONGEST 3 sectors**
+   - Check sector RSI vs market RSI
+   - Skip if sector RSI < market RSI (weak sector)
+   - Rotate through different sectors week-to-week (XLK one week, XLE next)
+
+5. **Options Confirmation for CONFIDENT tier**
+   - CONFIDENT (£1000): Requires bullish options £1M+ calls, ZERO puts
+   - Without options: Downgrade to MEDIUM (£250)
+
+6. **Earnings: Skip 5 days before AND 2 days after**
+   - IV crush kills mean reversion setups
+
+7. **Trend Confirmation**
+   - Price MUST be above MA20 AND MA50 for LONGS
+   - No "broken structure" plays unless extreme oversold (RSI <20)
+
+Confidence tiers and position sizes (QUALITY-FIRST):
+- SUPER (£2000): ONLY rare perfect setups (3+ confirmers + insider + options + score 13+)
+- CONFIDENT (£1000): Score 11-13 AND bullish options flow (£1M+ calls, zero puts)
+- MEDIUM (£250): Score 11+ AND 2 confirmers (no options required, but options helps)
+- LOW (£100): AVOID except extreme oversold (RSI <20) with clear support
+
+**VOLUME TARGET: 2-3 trades per week MAXIMUM**
+- This gives time for positions to mature
+- Better learning from diverse scenarios
+- Allows active exit management (exit at 50% target)
+
+**CRITICAL RULE: It is ALWAYS better to say NO TRADE than to force a marginal setup.**
+- If only 1 trade meets criteria today, suggest only that 1
+- If 0 trades meet criteria, output: NO_TRADE: [reason]
+- Resist the urge to lower thresholds just to "make a trade"
+
+For each new trade meeting criteria output:
 NEW_TRADE: [TICKER] | [LONG/SHORT] | [ENTRY_PRICE] | [TARGET] | [STOP_LOSS] | [CONFIDENCE] | [REASONING]
 
-If no good setups: NO_TRADE: [REASONING]
+**If no setups meet the ULTRA-SELECTIVE criteria:**
+NO_TRADE: [Explain which criteria failed]
+Example: "NO_TRADE: Only 2 candidates (MSFT, GOOGL) — both score <11 and lack 2+ confirmers. Waiting for higher-conviction setups."
+
+**EXPECTED OUTCOME:** 2-3 NEW_TRADE suggestions per analysis (not 5-10).
+If you see 0 trades after a day of analysis, that's GOOD — means we're waiting for quality.
 
 PART 3 — FORMAT YOUR FULL ANALYSIS IN THIS EXACT ORDER:
 

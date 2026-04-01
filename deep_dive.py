@@ -224,23 +224,37 @@ Three concrete reasons to AVOID with specific downside levels and risks.
 
 **VERDICT: [BUY / WATCH / AVOID]**
 
+**Ultra-Selective Criteria for BUY (SMART STRATEGY):**
+Only output BUY if ALL of the following are true:
+1. Risk/Reward is 2:1 or better
+2. 2+ confirmers present (RSI divergence + insider, or options $1M+ + support, etc.)
+3. Not within 5 days of earnings
+4. Sector is in top 3 momentum sectors
+5. Price above both MA20 and MA50
+6. Conviction is CONFIDENT or SUPER only (not MEDIUM)
+
+If setup doesn't meet ALL criteria above: Use WATCH (not BUY)
+
 **Entry Price:** $[price or range]
 **Target Price:** $[price] ([upside %])
 **Stop Loss:** $[price] ([downside %])
 **Risk/Reward:** [ratio]
 **Confidence Level:** [LOW / MEDIUM / CONFIDENT / SUPER]
 **Time Horizon:** [days/weeks]
+**Exit at 50% target to lock gains and accelerate learning cycles**
 
 Final paragraph: 3-5 sentences synthesising the bull and bear cases into your overall conclusion. Be direct and specific. Do not hedge excessively.
 
 ---
 
-TRADE EXECUTION: If and only if your verdict is BUY, output this line at the very end on its own line (use exact numeric values, no $ sign in the numbers):
+TRADE EXECUTION (QUALITY FIRST):
+Only if your verdict is BUY AND meets all ultra-selective criteria, output:
 NEW_TRADE: {ticker} | LONG | [entry_price] | [target_price] | [stop_loss] | [confidence] | [one sentence reasoning]
 
-Example: NEW_TRADE: AAPL | LONG | 182.50 | 195.00 | 176.00 | MEDIUM | Breaking above MA20 with bullish MACD and analyst target 8% above current price.
+Example: NEW_TRADE: AAPL | LONG | 182.50 | 195.00 | 176.00 | CONFIDENT | RSI divergence at support + bullish options $2M calls zero puts + analyst target confirms upside
 
-If your verdict is WATCH or AVOID, do not output a NEW_TRADE line."""
+If verdict is WATCH or AVOID, do NOT output a NEW_TRADE line.
+If score is under 11 or missing confirmers: Output WATCH (not BUY)."""
                         }
                     ]
                 )
