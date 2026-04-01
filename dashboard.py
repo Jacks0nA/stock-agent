@@ -40,6 +40,7 @@ from portfolio import (
     get_portfolio_balance, get_open_positions, get_closed_positions,
     get_current_prices, STARTING_BALANCE
 )
+from trade_analyzer import analyze_closed_positions
 
 # Initialize session state for analysis tracking
 if "analysis_running" not in st.session_state:
@@ -849,3 +850,103 @@ with tab5:
                 st.info(rec)
         else:
             st.success("✅ Keep trading! More data = better AI learning.")
+
+        st.divider()
+
+        # AI Learning - Pattern Analysis & Playbook
+        st.write("**📊 AI Pattern Recognition & Learned Playbook**")
+
+        # Generate trade analysis
+        trade_analysis = analyze_closed_positions(closed_positions)
+
+        if trade_analysis and trade_analysis.get("summary", {}).get("total_trades", 0) > 0:
+            summary = trade_analysis.get("summary", {})
+            patterns = trade_analysis.get("patterns", {})
+            psychology = trade_analysis.get("psychology", {})
+            market_structure = trade_analysis.get("market_structure", {})
+            timing = trade_analysis.get("timing", {})
+            confidence_analysis = trade_analysis.get("confidence_analysis", {})
+            sectors = trade_analysis.get("sector_performance", {})
+
+            # Summary metrics
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Total Trades Analyzed", summary.get("total_trades", 0))
+            col2.metric("Winners", summary.get("winning_trades", 0))
+            col3.metric("Losers", summary.get("losing_trades", 0))
+            col4.metric("Win Rate", f"{summary.get('win_rate', 0):.1f}%")
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                col_a.metric("Avg Winner", f"{summary.get('avg_winner_pct', 0):.2f}%")
+            with col_b:
+                col_b.metric("Avg Loser", f"{summary.get('avg_loser_pct', 0):.2f}%")
+
+            st.divider()
+
+            # Winning Patterns
+            with st.expander("🏆 Winning Patterns & Entry Conditions", expanded=True):
+                st.write("**What made your winners win:**")
+                for key, value in patterns.items():
+                    st.write(f"• **{key}**: {value}")
+
+            # Trader Psychology Insights
+            with st.expander("🧠 Trader Psychology Insights", expanded=True):
+                st.write("**Psychological patterns in your trades:**")
+                for key, value in psychology.items():
+                    if key not in ["optimal_hold_time_winners", "average_hold_losers"]:
+                        st.write(f"• **{key}**: {value}")
+
+                # Hold time analysis
+                col_hold1, col_hold2 = st.columns(2)
+                with col_hold1:
+                    st.info(f"⏱️ **Winners hold for:** {psychology.get('optimal_hold_time_winners', 'N/A')}")
+                with col_hold2:
+                    st.warning(f"⏱️ **Losers hold for:** {psychology.get('average_hold_losers', 'N/A')}")
+
+            # Market Structure
+            with st.expander("📈 Market Structure Factors", expanded=True):
+                st.write("**How market structure affects your trades:**")
+                for key, value in market_structure.items():
+                    st.write(f"• **{key}**: {value}")
+
+            # Entry/Exit Timing
+            with st.expander("⏰ Best Entry & Exit Rules (From Your Data)", expanded=True):
+                st.write("**Best entry conditions:**")
+                if isinstance(timing.get("best_entry_conditions"), list):
+                    for condition in timing.get("best_entry_conditions", []):
+                        st.write(f"✓ {condition}")
+
+                st.write("\n**Worst entry conditions to avoid:**")
+                if isinstance(timing.get("worst_entry_conditions"), list):
+                    for condition in timing.get("worst_entry_conditions", []):
+                        st.write(f"✗ {condition}")
+
+                st.write(f"\n**Exit rules:**")
+                if isinstance(timing.get("aggressive_exit_rules"), list):
+                    for rule in timing.get("aggressive_exit_rules", []):
+                        st.write(f"• {rule}")
+
+            # Confidence Tier Recommendations
+            with st.expander("🎯 Confidence Tier Adjustments (Your Data)", expanded=True):
+                for tier, conditions in confidence_analysis.items():
+                    if tier != "tier_adjustments":
+                        st.write(f"**{tier}**: {conditions}")
+
+                st.info(confidence_analysis.get("tier_adjustments", ""))
+
+            # Sector Performance
+            with st.expander("🌍 Sector Performance Analysis", expanded=True):
+                for key, value in sectors.items():
+                    st.write(f"• **{key}**: {value}")
+
+            st.divider()
+
+            # Full Playbook
+            with st.expander("📖 Your Complete Trading Playbook", expanded=False):
+                playbook = trade_analysis.get("playbook", "")
+                st.write(playbook)
+
+            st.success("✅ AI is learning from your trades! The more you trade and close positions, the smarter the analysis becomes.")
+
+        else:
+            st.info("🤖 Pattern recognition needs more closed trades to learn from. Close trades to build your playbook!")
