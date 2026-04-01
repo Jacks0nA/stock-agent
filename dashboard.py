@@ -41,6 +41,7 @@ from portfolio import (
     get_current_prices, STARTING_BALANCE
 )
 from trade_analyzer import analyze_closed_positions
+from signal_effectiveness import score_signal_effectiveness, format_signal_effectiveness_report
 
 # Initialize session state for analysis tracking
 if "analysis_running" not in st.session_state:
@@ -850,6 +851,94 @@ with tab5:
                 st.info(rec)
         else:
             st.success("✅ Keep trading! More data = better AI learning.")
+
+        st.divider()
+
+        # Phase 1: Signal Effectiveness Scoring
+        st.write("**⚡ Phase 1: Signal Effectiveness (Which Signals Actually Predict Wins?)**")
+
+        signal_analysis = score_signal_effectiveness(closed_positions)
+
+        if signal_analysis:
+            # Top level metrics
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Baseline Win Rate", f"{signal_analysis['baseline_win_rate']}%")
+            col2.metric("Total Trades", signal_analysis['total_trades'])
+            col3.metric("Winners", signal_analysis['winners'])
+            col4.metric("Losers", signal_analysis['losers'])
+
+            # Top predictors
+            st.write("**🎯 Top Predictive Signals (Ranked by Edge):**")
+            for i, pred in enumerate(signal_analysis.get("top_predictors", []), 1):
+                if "edge" in pred:
+                    st.write(f"{i}. **{pred['signal']}** — +{pred['edge']:.1f}% edge | {pred.get('data', '')}")
+                else:
+                    st.write(f"{i}. **{pred['signal']}** — {pred.get('insight', '')}")
+
+            # Recommendations
+            st.write("\n**💡 Signal-Based Recommendations:**")
+            for rec in signal_analysis.get("recommendations", []):
+                if "PRIORITIZE" in rec or "FOCUS" in rec or "✅" in rec:
+                    st.success(rec)
+                elif "REDUCE" in rec or "AVOID" in rec or "⚠️" in rec or "❌" in rec:
+                    st.warning(rec)
+                else:
+                    st.info(rec)
+
+            # Detailed signal breakdown
+            with st.expander("📈 Detailed Signal Analysis", expanded=False):
+                # Confidence tier analysis
+                st.write("**Confidence Tier Performance:**")
+                confidence = signal_analysis.get("signals", {}).get("confidence_tier", {})
+                conf_data = []
+                for tier, stats in sorted(confidence.items(), key=lambda x: x[1].get("edge_vs_baseline", 0), reverse=True):
+                    conf_data.append({
+                        "Tier": tier,
+                        "Win Rate %": stats["win_rate"],
+                        "Trades": stats["total_trades"],
+                        "Edge vs Baseline": f"+{stats['edge_vs_baseline']:.1f}%",
+                        "Power": stats["predictive_power"]
+                    })
+                if conf_data:
+                    conf_df = pd.DataFrame(conf_data)
+                    st.dataframe(conf_df, use_container_width=True, hide_index=True)
+
+                # Hold time analysis
+                st.write("\n**Hold Time Patterns:**")
+                hold = signal_analysis.get("signals", {}).get("hold_time", {})
+                col_h1, col_h2 = st.columns(2)
+                with col_h1:
+                    st.info(f"⏱️ **Winners Hold:** {hold.get('winner_avg_hold', 'N/A')} days (median: {hold.get('winner_median_hold', 'N/A')} days)")
+                with col_h2:
+                    st.warning(f"⏱️ **Losers Hold:** {hold.get('loser_avg_hold', 'N/A')} days (median: {hold.get('loser_median_hold', 'N/A')} days)")
+                st.caption(hold.get("insight", ""))
+
+                # Sector/Asset performance
+                st.write("\n**Asset Performance (2+ Trades):**")
+                sector = signal_analysis.get("signals", {}).get("sector_performance", {})
+                sector_data = []
+                for ticker, stats in list(sector.items())[:10]:  # Top 10
+                    sector_data.append({
+                        "Ticker": ticker,
+                        "Win Rate %": stats["win_rate"],
+                        "Trades": stats["trades"],
+                        "Avg P&L £": stats["avg_pnl"],
+                        "Edge": stats["predictive_power"]
+                    })
+                if sector_data:
+                    sector_df = pd.DataFrame(sector_data)
+                    st.dataframe(sector_df, use_container_width=True, hide_index=True)
+
+                # Entry timing analysis
+                st.write("\n**Entry Timing Patterns:**")
+                entry = signal_analysis.get("signals", {}).get("entry_timing", {})
+                col_e1, col_e2 = st.columns(2)
+                with col_e1:
+                    st.write(f"**Winner Average Entry Hour:** {entry.get('winner_avg_entry_hour', 'N/A')} GMT")
+                with col_e2:
+                    st.write(f"**Loser Average Entry Hour:** {entry.get('loser_avg_entry_hour', 'N/A')} GMT")
+                if entry.get("best_entry_hours"):
+                    st.info(f"Best entry hours: {', '.join(entry['best_entry_hours'])}")
 
         st.divider()
 
