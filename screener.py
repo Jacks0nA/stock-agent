@@ -1,7 +1,13 @@
 import yfinance as yf
 import pandas as pd
 from fetcher import calculate_rsi
-from datetime import datetime
+from datetime import datetime, timedelta
+import json
+import os
+
+# Cache file for screening results (expires after 1 hour)
+CACHE_FILE = "/tmp/screener_cache.json"
+CACHE_EXPIRY_MINUTES = 60
 
 # Assets excluded based on 2-year backtest with min 5 signals
 # Only excluding assets with meaningful sample sizes and consistently poor accuracy
@@ -568,9 +574,47 @@ def screen_ticker(ticker, market_regime="BULL"):
     except Exception as e:
         return None
 
-def run_screen(tickers=None):
+def get_cached_results():
+    """Returns cached screening results if they exist and are fresh."""
+    try:
+        if not os.path.exists(CACHE_FILE):
+            return None
+        with open(CACHE_FILE, 'r') as f:
+            cache = json.load(f)
+        cache_time = datetime.fromisoformat(cache.get("timestamp"))
+        if datetime.now() - cache_time < timedelta(minutes=CACHE_EXPIRY_MINUTES):
+            return cache.get("results"), cache.get("regime")
+    except Exception:
+        pass
+    return None
+
+def save_cache(results, regime):
+    """Save screening results to cache."""
+    try:
+        cache = {
+            "timestamp": datetime.now().isoformat(),
+            "results": results,
+            "regime": regime
+        }
+        with open(CACHE_FILE, 'w') as f:
+            json.dump(cache, f)
+    except Exception:
+        pass
+
+def run_screen(tickers=None, use_cache=True):
+    is_full_screen = tickers is None
     if tickers is None:
         tickers = get_all_tickers()
+
+    # Try cache only for full screening
+    if use_cache and is_full_screen:
+        cached = get_cached_results()
+        if cached:
+            shortlist, regime = cached
+            print(f"\n⚡ Using cached results (1 hour refresh)")
+            print(f"Market regime: {regime}")
+            print(f"Shortlist for Claude: {len(shortlist)}")
+            return shortlist, regime
 
     regime, spy_price, spy_ma50 = get_market_regime()
     print(f"\nMARKET REGIME: {regime}")
@@ -607,6 +651,10 @@ def run_screen(tickers=None):
     print(f"\nTOP BUY SIGNALS:")
     for r in buy[:5]:
         print(f"  {r['ticker']} — Score: {r['score']} — {', '.join(r['reasons'])}")
+
+    # Save to cache if full screen
+    if is_full_screen:
+        save_cache(shortlist, regime)
 
     return shortlist, regime
 
