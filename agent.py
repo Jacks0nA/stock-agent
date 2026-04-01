@@ -440,6 +440,8 @@ def execute_trade_decisions(analysis_text, historical, options_summary,
 
     for line in lines:
         line = line.strip()
+        # Remove markdown bold/italic markers (** or *)
+        line = line.replace("**", "").replace("*", "")
 
         # Handle position reviews
         if line.startswith("POSITION_REVIEW:"):
