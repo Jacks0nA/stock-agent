@@ -41,7 +41,7 @@ from portfolio import (
     get_current_prices, STARTING_BALANCE
 )
 
-# Only auto-refresh when not running an analysis
+# Initialize session state for analysis tracking
 if "analysis_running" not in st.session_state:
     st.session_state.analysis_running = False
 if "analysis_start_time" not in st.session_state:
@@ -53,9 +53,6 @@ if st.session_state.analysis_running and st.session_state.analysis_start_time:
     if elapsed > 360:  # 6 minutes = 360 seconds
         st.session_state.analysis_running = False
         st.session_state.analysis_start_time = None
-
-if not st.session_state.analysis_running and autorefresh_available:
-    st_autorefresh(interval=60000, key="autorefresh")
 
 load_dotenv()
 
@@ -825,3 +822,7 @@ with tab5:
                 st.info(rec)
         else:
             st.success("✅ Keep trading! More data = better AI learning.")
+
+# Auto-refresh only when not running analysis — called at END of script to avoid duplicate UI
+if autorefresh_available and not st.session_state.analysis_running:
+    st_autorefresh(interval=60000, key="autorefresh")
