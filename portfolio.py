@@ -415,9 +415,18 @@ def check_quick_loser_exits(open_positions, current_prices):
     today = datetime.now(GMT)
 
     for position in open_positions:
-        # Only check losers
-        loss_pct = float(position.get("pnl_pct", 0))
-        if loss_pct >= 0:  # Not a loser
+        ticker = position["ticker"]
+        entry = float(position["entry_price"])
+        current_price = current_prices.get(ticker)
+
+        if current_price is None:
+            continue
+
+        # Calculate current loss percentage
+        current_loss_pct = ((current_price - entry) / entry) * 100
+
+        # Only check losers (not profitable)
+        if current_loss_pct >= 0:  # Not a loser
             continue
 
         # Only exit after 3 days (some patience for mean reversion)
@@ -425,13 +434,9 @@ def check_quick_loser_exits(open_positions, current_prices):
         days_held = (today - opened).days
 
         if days_held >= 3:
-            ticker = position["ticker"]
-            current_price = current_prices.get(ticker, float(position["entry_price"]))
-            entry = float(position["entry_price"])
-
             # Only exit if still negative (don't let it bounce back)
             if current_price < entry:
-                loss_pct = round(((current_price - entry) / entry) * 100, 2)
+                loss_pct = round(current_loss_pct, 2)
                 print(f"⚠️ QUICK LOSER EXIT: {ticker} at {current_price} after {days_held} days — {loss_pct}%")
                 close_position(
                     position["id"],
