@@ -406,7 +406,7 @@ with tab1:
                 st.warning("Markets are closed — it's the weekend. Analysis will run but no new positions will be opened.")
             elif now < market_open.replace(second=0, microsecond=0) or now > market_close.replace(second=0, microsecond=0):
                 st.warning("US markets are currently closed. Analysis will run but no new positions will be opened.")
-            run_full_analysis(mode="Manual", market_is_open=market_open_flag)
+            run_full_analysis(mode="Manual", market_is_open=True)
 
     elif mode == "Daily":
         windows = get_daily_windows()
@@ -429,7 +429,7 @@ with tab1:
             st.success("All windows for today are complete or not yet due.")
             st.write("The app will auto-run when you open it during a scheduled window.")
             if st.button("Run Manual Check Now", type="secondary"):
-                run_full_analysis(mode="Manual", market_is_open=is_market_open())
+                run_full_analysis(mode="Manual", market_is_open=True)
 
 with tab2:
     st.subheader("Paper Trading Portfolio")
@@ -637,7 +637,7 @@ with tab4:
         result = run_deep_dive(
             deep_dive_ticker.strip(),
             use_enhanced_news=get_enhanced_news_setting(),
-            market_is_open=market_open_flag_dd,
+            market_is_open=True,
         )
         st.divider()
         st.markdown(result)
