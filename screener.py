@@ -521,9 +521,30 @@ def screen_ticker(ticker, market_regime="BULL"):
             score -= 2
             reasons.append("Bearish momentum confirmed — price and RSI both turning down")
 
-        # Signal thresholds with quality check
-        if score >= 7 and check_signal_quality(score, rsi, near_support, bullish_momentum,
-                                                near_resistance, bearish_momentum):
+        # IMPROVED Signal thresholds: higher bar, require 2+ strong signals
+        # Count strong confirmers (RSI extreme + momentum/divergence/support)
+        strong_bullish = 0
+        if rsi and rsi < 30:  # Extreme oversold
+            strong_bullish += 1
+        if bullish_divergence:  # Price weakness but RSI strength
+            strong_bullish += 1
+        if near_support and bullish_momentum:  # Support + uptrend
+            strong_bullish += 1
+        if volume_consistent and change_pct > 0:  # Conviction
+            strong_bullish += 1
+
+        strong_bearish = 0
+        if rsi and rsi > 70:  # Extreme overbought
+            strong_bearish += 1
+        if bearish_divergence:  # Price strength but RSI weakness
+            strong_bearish += 1
+        if near_resistance and bearish_momentum:  # Resistance + downtrend
+            strong_bearish += 1
+        if volume_consistent and change_pct < 0:  # Conviction
+            strong_bearish += 1
+
+        # BUY: score 10+ AND 2+ strong bullish signals
+        if score >= 10 and strong_bullish >= 2:
             if market_regime == "BEAR":
                 signal = "WATCH"
                 reasons.append("BUY suppressed — bear market regime (SPY below 50MA)")
@@ -532,10 +553,11 @@ def screen_ticker(ticker, market_regime="BULL"):
                 reasons.append("BUY suppressed — within earnings exclusion window")
             else:
                 signal = "BUY"
-        elif score <= -7 and check_signal_quality(score, rsi, near_support, bullish_momentum,
-                                                   near_resistance, bearish_momentum):
+        # AVOID: score -10 or lower AND 2+ strong bearish signals
+        elif score <= -10 and strong_bearish >= 2:
             signal = "AVOID"
-        elif abs(score) >= 3:
+        # WATCH: marginal setups (score 7-9 with some confirmation)
+        elif (score >= 7 and strong_bullish >= 1) or (abs(score) >= 5 and check_signal_quality(score, rsi, near_support, bullish_momentum, near_resistance, bearish_momentum)):
             signal = "WATCH"
         else:
             signal = "NEUTRAL"

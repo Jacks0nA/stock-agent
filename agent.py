@@ -285,6 +285,13 @@ Rules you must follow:
 - Exit if stop loss breached (already handled automatically)
 - Maximum 10 days hold (already handled automatically)
 
+AGGRESSIVE EXIT RULES (lock in wins early):
+- Exit at 50% of target profit (capture half, let other half run)
+- Exit if RSI reverses from overbought (>70 → <60) without new highs
+- Exit if volume dies (drops below 20-day avg) — losing institutional support
+- Exit if position has 5+ days of flat/sideways action — mean reversion complete
+- Exit if sector turns negative and stock hasn't outperformed (sector rotation)
+
 For each open position output:
 POSITION_REVIEW: [TICKER] | [HOLD/EXIT] | [NEW_TARGET if changed] | [NEW_STOP if changed] | [NEW_CONFIDENCE] | [REASONING]
 
@@ -292,11 +299,18 @@ PART 2 — NEW TRADE DECISIONS:
 Available portfolio slots: {available_slots}
 Available cash: £{round(balance, 2)}
 
+STRICT FILTERS (must pass ALL):
+1. Risk/Reward: Minimum 2:1 ratio (target is 2x below stop loss distance)
+2. Sector Rotation: Only trade in STRONGEST sectors (check sector RSI vs overall market)
+3. Options Confirmation: CONFIDENT tier requires bullish options flow (calls > puts, significant volume)
+4. No earnings trades: Skip any within 5 days of earnings
+5. Trend confirmation: Price must be above both MA20 AND MA50 for LONGS
+
 Confidence tiers and position sizes:
-- SUPER (£2000): score 14+, all three strong confirmers, both insider AND options flow, high accuracy asset
-- CONFIDENT (£1000): score 11-13, two strong confirmers, insider OR options flow, high accuracy asset
-- MEDIUM (£250): score 9-10, one strong confirmer, insider OR options
-- LOW (£100): score 7-8, one confirmer, no insider/options
+- SUPER (£2000): Only if 2:1+ risk/reward AND strong options + insider + technical trifecta
+- CONFIDENT (£1000): 2:1+ risk/reward AND bullish options flow (£1M+ calls zero puts)
+- MEDIUM (£250): 2:1+ risk/reward AND technical + one confirmer (no options required)
+- LOW (£100): Only for extreme oversold (RSI <25) with support
 
 Only open a position if you genuinely believe in the setup.
 It is always better to say NO TRADE than to force a low quality setup.
