@@ -292,8 +292,8 @@ def run_full_analysis(mode="Manual", market_is_open=True):
 
         st.subheader("Shortlisted Assets")
         for r in shortlist:
-            emoji = "🟢" if r["signal"] == "BUY" else "🔴" if r["signal"] == "AVOID" else "⚪"
-            st.write(f"{emoji} **{r['ticker']}** — ${r['price']} — Score: {r['score']} — {', '.join(r['reasons'])}")
+            action_label = r.get("action_label", "⚪ NEUTRAL")
+            st.write(f"{action_label} — **{r['ticker']}** — ${r['price']} — Score: {r['score']}")
 
         with st.spinner("Fetching market context..."):
             market_context = get_market_context()
