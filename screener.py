@@ -338,6 +338,57 @@ def check_momentum_confirmation(closes, rsi_series):
     except Exception:
         return False, False
 
+def assign_action_label(result):
+    """
+    Assign a clear action label to each stock based on score, technicals, and regime.
+    Returns: label string with emoji and description
+    """
+    score = result.get("score", 0)
+    signal = result.get("signal", "NEUTRAL")
+    rsi = result.get("rsi", 50)
+    near_support = result.get("near_support", False)
+    bullish_momentum = result.get("bullish_momentum", False)
+    near_resistance = result.get("near_resistance", False)
+    bearish_momentum = result.get("bearish_momentum", False)
+    bullish_divergence = result.get("bullish_divergence", False)
+
+    # Count bullish confirmers
+    bullish_confirmers = 0
+    if rsi and rsi < 30:
+        bullish_confirmers += 1
+    if bullish_divergence:
+        bullish_confirmers += 1
+    if near_support and bullish_momentum:
+        bullish_confirmers += 1
+
+    # BUY signal: strong setup with good score
+    if signal == "BUY":
+        return "🟢 BUY SIGNAL"
+
+    # WATCH THE BOUNCE: oversold at support (best bounce candidate)
+    # Works even in bear markets if price is testing key support
+    if (rsi < 30 and near_support) or (rsi < 25 and near_support and bullish_divergence):
+        return "📈 WATCH THE BOUNCE"
+
+    # DON'T TRADE: negative score in strong downtrend with no bullish signals
+    if score < -5 and bearish_momentum and near_resistance and bullish_confirmers == 0:
+        return "❌ DON'T TRADE THIS"
+
+    # AVOID: explicit avoid signals (strong bearish setup)
+    if signal == "AVOID":
+        return "❌ DON'T TRADE THIS"
+
+    # WATCH: other marginal setups
+    if signal == "WATCH":
+        # Prioritize bounce setups at support
+        if rsi < 35 and near_support:
+            return "📈 WATCH THE BOUNCE"
+        # Otherwise neutral watch
+        return "⚪ WATCH FOR SETUP"
+
+    # Default neutral
+    return "⚪ NEUTRAL"
+
 def screen_ticker(ticker, market_regime="BULL"):
     try:
         stock = yf.Ticker(ticker)
@@ -562,7 +613,7 @@ def screen_ticker(ticker, market_regime="BULL"):
         else:
             signal = "NEUTRAL"
 
-        return {
+        result_dict = {
             "ticker": ticker,
             "price": current_price,
             "change_pct": change_pct,
@@ -592,6 +643,9 @@ def screen_ticker(ticker, market_regime="BULL"):
             "signal": signal,
             "reasons": reasons
         }
+        # Add action label for clear trader guidance
+        result_dict["action_label"] = assign_action_label(result_dict)
+        return result_dict
 
     except Exception as e:
         return None
@@ -669,6 +723,11 @@ def run_screen(tickers=None, use_cache=True):
     print(f"BUY signals:   {len(buy)}")
     print(f"WATCH signals: {len(watch)}")
     print(f"Shortlist for Claude: {len(shortlist)}")
+
+    print(f"\nSHORTLIST WITH ACTION LABELS:")
+    for r in shortlist:
+        label = assign_action_label(r)
+        print(f"  {label} — {r['ticker']} (${r['price']}) | Score: {r['score']}")
 
     print(f"\nTOP BUY SIGNALS:")
     for r in buy[:5]:
