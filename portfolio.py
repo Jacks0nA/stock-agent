@@ -4,6 +4,7 @@ import httpx
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 import yfinance as yf
+from kelly_criterion import kelly_from_historical_trades, get_position_size
 
 load_dotenv()
 
@@ -75,12 +76,25 @@ def get_closed_positions():
 def open_position(ticker, direction, entry_price, target_price, stop_loss,
                   confidence, score, claude_reasoning, position_size=None):
     try:
-        if position_size is None:
-            position_size = CONFIDENCE_SIZES.get(confidence, 100.0)
-
         balance = get_portfolio_balance()
+
+        # Kelly Criterion position sizing (adaptive based on historical performance)
+        if position_size is None:
+            closed_positions = get_closed_positions()
+            kelly_data = kelly_from_historical_trades(closed_positions)
+
+            # Use Kelly-calculated size if we have sufficient history, otherwise fall back to confidence-based
+            if not kelly_data.get("insufficient_data") and kelly_data.get("kelly_fraction", 0) > 0:
+                kelly_fraction = kelly_data["kelly_fraction"]
+                position_size = get_position_size(balance, kelly_fraction, entry_price, stop_loss)
+                print(f"   Kelly Criterion sizing: {kelly_data['trade_count']} trades history, {kelly_data['win_rate']:.1%} win rate → £{position_size:.2f}")
+            else:
+                # Insufficient history: use confidence-based defaults
+                position_size = CONFIDENCE_SIZES.get(confidence, 100.0)
+                print(f"   Using confidence tier default (insufficient trade history): £{position_size:.2f}")
+
         if position_size > balance:
-            print(f"Insufficient balance to open position in {ticker}")
+            print(f"Insufficient balance to open position in {ticker} (need £{position_size:.2f}, have £{balance:.2f})")
             return None
 
         url = f"{get_base_url()}/rest/v1/positions"

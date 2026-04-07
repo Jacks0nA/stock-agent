@@ -19,6 +19,7 @@ from options import get_options_summary
 from insider import get_insider_summary
 from earnings import get_earnings_calendar, get_earnings_summary
 from sectors import get_market_context, get_market_summary
+from market_regime import get_market_regime, get_regime_label
 from prediction_tracker import save_prediction, get_accuracy_summary
 from agent import execute_trade_decisions
 from portfolio import (
@@ -149,6 +150,14 @@ def run_deep_dive(ticker: str, use_enhanced_news: bool = False, market_is_open: 
     trade_analysis = analyze_closed_positions(closed_positions) if closed_positions else {}
     playbook_context = get_playbook_context_for_claude(trade_analysis)
 
+    # Get market regime for context-aware analysis
+    try:
+        regime_data = get_market_regime()
+        regime_label = get_regime_label(regime_data)
+    except Exception as e:
+        print(f"Market regime detection error in deep dive: {e}")
+        regime_label = "RANGING"
+
     with st.spinner(f"Claude running deep dive on {ticker}..."):
         for attempt in range(3):
             try:
@@ -159,6 +168,9 @@ def run_deep_dive(ticker: str, use_enhanced_news: bool = False, market_is_open: 
                         {
                             "role": "user",
                             "content": f"""You are a professional equity analyst. Produce a comprehensive deep-dive investment thesis for a single stock.
+
+CURRENT MARKET REGIME: {regime_label}
+(Mean reversion strategies work best in RANGING markets. In strong BULL/BEAR trends, mean reversion often fails.)
 
 STOCK: {ticker}
 
@@ -227,14 +239,23 @@ Three concrete reasons to AVOID with specific downside levels and risks.
 
 **VERDICT: [BUY / WATCH / AVOID]**
 
-**Ultra-Selective Criteria for BUY (SMART STRATEGY):**
+**Ultra-Selective Criteria for BUY (RESEARCH-BACKED SMART STRATEGY):**
 Only output BUY if ALL of the following are true:
-1. Risk/Reward is 2:1 or better
-2. 2+ confirmers present (RSI divergence + insider, or options $1M+ + support, etc.)
-3. Not within 5 days of earnings
-4. Sector is in top 3 momentum sectors
-5. Price above both MA20 and MA50
-6. Conviction is CONFIDENT or SUPER only (not MEDIUM)
+
+REGIME RULE (CRITICAL):
+- Mean reversion only works in RANGING markets (win rate 60-70%)
+- In BULL/BEAR trends, mean reversion fails (win rate 35-45%)
+- If market is BULL or BEAR: Only output BUY if setup is extreme (RSI <20 or >80 with volume)
+
+1. Risk/Reward is 2:1 or better (favorable asymmetry required)
+2. 3+ STRONG confirmers present (research shows 2 is insufficient):
+   - STRONG signals: RSI divergence, insider buying, bullish options $2M+, support hold + volume bounce
+   - WEAK signals (don't count): MACD alone (32% win rate), Bollinger Bands alone (edge lost), MA positioning alone
+3. Not within 5 days of earnings (avoid IV crush)
+4. Sector is in top 3 momentum sectors (diversify across sectors)
+5. Price above both MA20 and MA50 (trend confirmation)
+6. Conviction is CONFIDENT or SUPER ONLY (no MEDIUM tier)
+7. Technical + fundamental alignment (research shows this matters)
 
 If setup doesn't meet ALL criteria above: Use WATCH (not BUY)
 

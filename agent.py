@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from memory import save_analysis, get_memory_summary
 from earnings import get_earnings_summary
 from sectors import get_market_summary
+from market_regime import get_market_regime, get_regime_label, regime_suppresses_buys
 from portfolio import (
     get_portfolio_summary, get_open_positions, get_current_prices,
     open_position, close_position, update_position,
@@ -246,6 +247,26 @@ def analyse_stocks(df, news, historical, earnings, market_context,
     trade_analysis = analyze_closed_positions(closed_positions) if closed_positions else {}
     playbook_context = get_playbook_context_for_claude(trade_analysis)
 
+    # Get market regime (BULL, BEAR, RANGING)
+    try:
+        regime_data = get_market_regime()
+        regime_label = get_regime_label(regime_data)
+        regime_confidence = regime_data.get("confidence", "MEDIUM")
+        regime_reasons = "\n".join(regime_data.get("reasons", []))
+    except Exception as e:
+        print(f"Market regime detection error: {e}")
+        regime_label = "RANGING"
+        regime_confidence = "MEDIUM"
+        regime_reasons = "Unable to calculate market regime"
+
+    regime_context = f"""MARKET REGIME DETECTION:
+Regime: {regime_label} (Confidence: {regime_confidence})
+Reasons:
+{regime_reasons}
+
+IMPORTANT: Mean reversion strategies work best in RANGING markets. In BULL or BEAR markets, mean reversion often fails.
+Only suggest mean reversion (oversold bounce) trades if market is RANGING or if the setup is extraordinarily strong."""
+
     for attempt in range(3):
         try:
             message = client.messages.create(
@@ -255,6 +276,8 @@ def analyse_stocks(df, news, historical, earnings, market_context,
                     {
                         "role": "user",
                         "content": f"""You are a professional stock analyst managing a paper trading portfolio.
+
+{regime_context}
 
 MARKET: {market_summary}
 
@@ -330,13 +353,27 @@ Available cash: £{round(balance, 2)}
 
 🔥 ULTRA-SELECTIVE ENTRY CRITERIA (ALL must pass):
 
-1. **SCORE THRESHOLD: 11+ minimum** (not 10)
-   - Only suggest score 11-13 or higher
-   - Skip anything below 11, no exceptions
+REGIME-AWARE RULE (CRITICAL):
+- Mean reversion only works in RANGING markets (win rate 60-70%)
+- In BULL/BEAR trends, mean reversion fails (win rate 35-45%)
+- If market is BULL or BEAR: Only trade if setup is extreme (RSI <20 or >80)
+- Prefer NO_TRADE over forcing trades in wrong regime
 
-2. **CONFIRMERS: 2+ STRONG signals required**
-   - Strong signals: RSI divergence, insider buying, bullish options £1M+, support hold
-   - Weak signals: Above MA20, volume ratio >1.5x (these alone aren't enough)
+1. **SCORE THRESHOLD: 12+ minimum** (raised from 11 based on research)
+   - Only suggest score 12-13 or higher
+   - Skip anything below 12, no exceptions
+   - Research shows 11 is borderline; 12+ filters noise better
+
+2. **CONFIRMERS: 3+ signals required for CONFIDENT** (raised from 2)
+   - STRONG signals ONLY (research-backed):
+     * RSI divergence (bullish div at support = high predictive power)
+     * Insider buying (confirmed profitable signal)
+     * Volume spike on bounce (institution entry)
+     * Support hold with bounce (self-fulfilling, ML confirms +65% better)
+   - WEAK signals (don't count as confirmers):
+     * Moving average positioning alone (not predictive enough)
+     * MACD alone (32% win rate without other signals)
+     * Bollinger Bands alone (edge lost since 2002)
 
 3. **Risk/Reward: Strict 2:1 minimum**
    - Target must be 2x the distance below stop loss
@@ -349,14 +386,16 @@ Available cash: £{round(balance, 2)}
 
 5. **Options Confirmation for CONFIDENT tier**
    - CONFIDENT (£1000): Requires bullish options £1M+ calls, ZERO puts
-   - Without options: Downgrade to MEDIUM (£250)
+   - Options flow must align with technicals (research shows divergence = exit signal)
+   - Without strong options: Downgrade to MEDIUM (£250)
 
 6. **Earnings: Skip 5 days before AND 2 days after**
    - IV crush kills mean reversion setups
+   - Insider advantage only lasts 6-12 months, not useful for short trades
 
 7. **Trend Confirmation**
    - Price MUST be above MA20 AND MA50 for LONGS
-   - No "broken structure" plays unless extreme oversold (RSI <20)
+   - No "broken structure" plays unless extreme oversold (RSI <15) with volume confirmation
 
 Confidence tiers and position sizes (QUALITY-FIRST):
 - SUPER (£2000): ONLY rare perfect setups (3+ confirmers + insider + options + score 13+)
