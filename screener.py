@@ -441,19 +441,42 @@ def screen_ticker(ticker, market_regime="BULL"):
         score = 0
         reasons = []
 
-        # RSI
-        if rsi < 30:
-            score += 3
-            reasons.append(f"RSI oversold ({rsi})")
-        elif rsi < 40:
-            score += 1
-            reasons.append(f"RSI approaching oversold ({rsi})")
-        elif rsi > 70:
-            score -= 3
-            reasons.append(f"RSI overbought ({rsi})")
-        elif rsi > 60:
-            score -= 1
-            reasons.append(f"RSI elevated ({rsi})")
+        # RSI (regime-aware)
+        if market_regime == "BULL":
+            # In bull markets, overbought is NORMAL and bullish
+            if rsi > 70:
+                score += 3
+                reasons.append(f"RSI overbought ({rsi}) — bullish in BULL market")
+            elif rsi > 60:
+                score += 1
+                reasons.append(f"RSI elevated ({rsi}) — strength in BULL market")
+            elif rsi < 40:
+                score -= 1
+                reasons.append(f"RSI {rsi} — weakness in BULL market")
+        elif market_regime == "BEAR":
+            # In bear markets, oversold is opportunity
+            if rsi < 30:
+                score += 3
+                reasons.append(f"RSI oversold ({rsi})")
+            elif rsi < 40:
+                score += 1
+                reasons.append(f"RSI approaching oversold ({rsi})")
+            elif rsi > 70:
+                score -= 3
+                reasons.append(f"RSI overbought ({rsi})")
+            elif rsi > 60:
+                score -= 1
+                reasons.append(f"RSI elevated ({rsi})")
+        else:  # RANGING
+            # In ranging markets, extremes are mean reversion setups
+            if rsi < 30:
+                score += 2
+                reasons.append(f"RSI oversold ({rsi})")
+            elif rsi > 70:
+                score += 2
+                reasons.append(f"RSI overbought ({rsi})")
+            elif 40 <= rsi <= 60:
+                reasons.append(f"RSI neutral ({rsi}) — ranging market")
 
         # Relative strength vs sector
         if sector_rsi is not None:
@@ -528,21 +551,51 @@ def screen_ticker(ticker, market_regime="BULL"):
             score -= 1
             reasons.append("3 of last 5 days closed lower — consistent downward pressure")
 
-        # Gap detection
-        if gap_down:
-            score += 1
-            reasons.append(f"Gap down detected ({change_pct}%) — potential oversold bounce")
-        elif gap_up:
-            score -= 1
-            reasons.append(f"Gap up detected ({change_pct}%) — extended, watch for reversal")
+        # Gap detection (regime-aware)
+        if market_regime == "BULL":
+            if gap_up:
+                score += 1
+                reasons.append(f"Gap up detected ({change_pct}%) — bullish momentum")
+            elif gap_down:
+                score -= 1
+                reasons.append(f"Gap down detected ({change_pct}%) — weakness in BULL")
+        elif market_regime == "BEAR":
+            if gap_down:
+                score += 1
+                reasons.append(f"Gap down detected ({change_pct}%) — potential bounce")
+            elif gap_up:
+                score -= 1
+                reasons.append(f"Gap up detected ({change_pct}%) — extended, watch for reversal")
+        else:  # RANGING
+            if gap_down:
+                score += 1
+                reasons.append(f"Gap down detected ({change_pct}%) — potential oversold bounce")
+            elif gap_up:
+                score -= 1
+                reasons.append(f"Gap up detected ({change_pct}%) — extended, watch for reversal")
 
-        # Distance from 30d range
-        if pct_from_low < 2:
-            score += 1
-            reasons.append("Near 30d low — potential bounce")
-        elif pct_from_high > -2:
-            score -= 1
-            reasons.append("Near 30d high — potential resistance")
+        # Distance from 30d range (regime-aware)
+        if market_regime == "BULL":
+            if pct_from_high > -2:
+                score += 2
+                reasons.append("At/near 30d high — bullish momentum in BULL")
+            elif pct_from_low < 2:
+                score -= 1
+                reasons.append("Near 30d low — weakness in BULL")
+        elif market_regime == "BEAR":
+            if pct_from_low < 2:
+                score += 1
+                reasons.append("Near 30d low — potential bounce")
+            elif pct_from_high > -2:
+                score -= 2
+                reasons.append("Near 30d high — potential resistance")
+        else:  # RANGING
+            if pct_from_low < 2:
+                score += 1
+                reasons.append("Near 30d low — potential bounce")
+            elif pct_from_high > -2:
+                score -= 1
+                reasons.append("Near 30d high — potential resistance")
 
         # ADX trend strength
         if adx is not None:
