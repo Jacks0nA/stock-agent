@@ -130,6 +130,7 @@ def determine_confidence_level(ticker, score, historical, options_summary, insid
     """
     Determines confidence tier based on score, confirmers, insider and options data.
     Returns LOW, MEDIUM, CONFIDENT, or SUPER.
+    Position size determined by Kelly Criterion (adapts with win rate).
     """
     strong_confirmers = 0
     has_insider = ticker in insider_summary if insider_summary else False
@@ -140,11 +141,11 @@ def determine_confidence_level(ticker, score, historical, options_summary, insid
         if rsi and rsi < 35:
             strong_confirmers += 1
 
-    if score >= 14 and strong_confirmers >= 2 and has_insider and has_options:
+    if score >= 13 and strong_confirmers >= 3 and has_insider and has_options:
         return "SUPER"
-    elif score >= 11 and strong_confirmers >= 1 and (has_insider or has_options):
+    elif score >= 11 and strong_confirmers >= 3 and (has_insider or has_options):
         return "CONFIDENT"
-    elif score >= 9 and (has_insider or has_options):
+    elif score >= 10 and strong_confirmers >= 2:
         return "MEDIUM"
     else:
         return "LOW"
@@ -293,7 +294,13 @@ PREDICTION HISTORY:
 
 MEMORY: {memory_summary}
 
-YOUR LEARNED PLAYBOOK (Trading patterns that work):
+⚠️ LEARNING PHASE (Week 1 of 8):
+Playbook has insufficient data — treat patterns as HYPOTHESES to test, not rules to follow.
+Goal: Collect 40-60 closed trades over 2 months to build accurate model.
+GOOD trades teach what works. BAD trades teach what fails. Both are equally valuable.
+Playbook patterns (below) should inform but NOT veto trade decisions.
+
+YOUR LEARNED PLAYBOOK (Early hypothesis — insufficient data):
 {playbook_context}
 
 FUNDAMENTALS:
@@ -343,85 +350,75 @@ AGGRESSIVE EXIT RULES (CRITICAL for AI learning):
 For each open position output:
 POSITION_REVIEW: [TICKER] | [HOLD/EXIT] | [NEW_TARGET if changed] | [NEW_STOP if changed] | [NEW_CONFIDENCE] | [REASONING]
 
-PART 2 — NEW TRADE DECISIONS (QUALITY OVER QUANTITY STRATEGY):
+PART 2 — NEW TRADE DECISIONS (LEARNING VELOCITY OVER PERFECTION):
 
-**CRITICAL: The goal is 50-70 HIGH-QUALITY closed trades over 2 months for AI learning.**
-**Better to make 2 excellent trades/week than 10 mediocre ones.**
+**CRITICAL: The goal is 40-60 CLOSED TRADES over 2 months to train the model.**
+**Better to make 3 trades/week (some winners, some losers) than 0 trades (no learning).**
+**Every trade — win or loss — refines the model. No data = no learning.**
+
+Current pace: 0 trades in 10 days. Target: 2-3 trades/day on active market days.
 
 Available portfolio slots: {available_slots}
 Available cash: £{round(balance, 2)}
 
-🔥 ULTRA-SELECTIVE ENTRY CRITERIA (ALL must pass):
+🔥 ENTRY CRITERIA (LEARNING MODE — Maximize trade flow):
 
-REGIME-AWARE RULE (CRITICAL):
-- Mean reversion only works in RANGING markets (win rate 60-70%)
-- In BULL/BEAR trends, mean reversion fails (win rate 35-45%)
-- If market is BULL or BEAR: Only trade if setup is extreme (RSI <20 or >80)
-- Prefer NO_TRADE over forcing trades in wrong regime
+**MINIMUM REQUIREMENTS (both must pass):**
 
-1. **SCORE THRESHOLD: 12+ minimum** (raised from 11 based on research)
-   - Only suggest score 12-13 or higher
-   - Skip anything below 12, no exceptions
-   - Research shows 11 is borderline; 12+ filters noise better
+1. **SCORE: 10+ minimum**
+   - No regime veto — trade BULL, BEAR, RANGING equally
+   - We're testing what works, not filtering by theory
+   - MEDIUM: 10+ | CONFIDENT: 11+ | SUPER: 13+
 
-2. **CONFIRMERS: 3+ signals required for CONFIDENT** (raised from 2)
-   - STRONG signals ONLY (research-backed):
-     * RSI divergence (bullish div at support = high predictive power)
-     * Insider buying (confirmed profitable signal)
-     * Volume spike on bounce (institution entry)
-     * Support hold with bounce (self-fulfilling, ML confirms +65% better)
-   - WEAK signals (don't count as confirmers):
-     * Moving average positioning alone (not predictive enough)
-     * MACD alone (32% win rate without other signals)
-     * Bollinger Bands alone (edge lost since 2002)
+2. **RISK/REWARD: 2:1 minimum ALWAYS**
+   - Risk = distance to stop loss | Reward = distance to target
+   - This prevents catastrophic losses while learning
+   - Example: Stop 100, Target 110, Risk 10, Reward 20 ✓
 
-3. **Risk/Reward: Strict 2:1 minimum**
-   - Target must be 2x the distance below stop loss
-   - Example: Stop at 100, Target at 110, Risk = 10, Reward = 20 ✓
+3. **NOT near earnings** (5 days before, 2 days after)
+   - IV crush corrupts the signal data
 
-4. **Sector Filter: Only STRONGEST 3 sectors**
-   - Check sector RSI vs market RSI
-   - Skip if sector RSI < market RSI (weak sector)
-   - Rotate through different sectors week-to-week (XLK one week, XLE next)
+4. **CONFIRMERS determine tier sizing (NOT a veto):**
+   - MEDIUM (£250): 2+ confirmers OR 1 confirmer + strong options/insider
+   - CONFIDENT (£1000): 3+ confirmers OR 2 confirmers + strong options/insider
+   - SUPER (£2000): 3+ confirmers + insider + options
+   - Fewer confirmers = smaller position, not "don't trade"
 
-5. **Options Confirmation for CONFIDENT tier**
-   - CONFIDENT (£1000): Requires bullish options £1M+ calls, ZERO puts
-   - Options flow must align with technicals (research shows divergence = exit signal)
-   - Without strong options: Downgrade to MEDIUM (£250)
+**WHAT TO IGNORE during learning phase:**
+- Playbook patterns (insufficient data — only reference)
+- Whether technicals look "perfect" (imperfect setups teach more)
+- Market regime concerns (trade all regimes equally)
+- RSI overbought/oversold as veto (entry timing varies — test it)
+- Whether options/price direction match (divergences = learning data)
 
-6. **Earnings: Skip 5 days before AND 2 days after**
-   - IV crush kills mean reversion setups
-   - Insider advantage only lasts 6-12 months, not useful for short trades
+**POSITION SIZING:**
+- Tier determined by confirmers (MEDIUM/CONFIDENT/SUPER)
+- Size determined by Kelly Criterion (adapts with win rate)
+- Starting sizes: MEDIUM £250, CONFIDENT £1000, SUPER £2000
 
-7. **Trend Confirmation**
-   - Price MUST be above MA20 AND MA50 for LONGS
-   - No "broken structure" plays unless extreme oversold (RSI <15) with volume confirmation
+**VOLUME TARGET: 2-3 trades PER ANALYSIS**
+- Current pace is 0 trades in 10 days — this is data starvation
+- Target: 2-3 trades minimum per market analysis day
+- Some will win, some will lose — both teach the model
 
-Confidence tiers and position sizes (QUALITY-FIRST):
-- SUPER (£2000): ONLY rare perfect setups (3+ confirmers + insider + options + score 13+)
-- CONFIDENT (£1000): Score 11-13 AND bullish options flow (£1M+ calls, zero puts)
-- MEDIUM (£250): Score 11+ AND 2 confirmers (no options required, but options helps)
-- LOW (£100): AVOID except extreme oversold (RSI <20) with clear support
+**CRITICAL RULE FOR LEARNING PHASE:**
+- If it meets MINIMUM REQUIREMENTS (score 10+, 2:1 R:R, not near earnings), SUGGEST IT
+- Don't veto trades because they "don't look perfect"
+- The imperfect trades are where the learning happens
+- Example: If JPM has score 12 + 2:1 R:R, take it. Test if exceptional options beat weak entry timing.
 
-**VOLUME TARGET: 2-3 trades per week MAXIMUM**
-- This gives time for positions to mature
-- Better learning from diverse scenarios
-- Allows active exit management (exit at 50% target)
+For each new trade output:
+NEW_TRADE: [TICKER] | [LONG/SHORT] | [ENTRY_PRICE] | [TARGET] | [STOP_LOSS] | [TIER] | [REASONING]
 
-**CRITICAL RULE: It is ALWAYS better to say NO TRADE than to force a marginal setup.**
-- If only 1 trade meets criteria today, suggest only that 1
-- If 0 trades meet criteria, output: NO_TRADE: [reason]
-- Resist the urge to lower thresholds just to "make a trade"
+Example:
+NEW_TRADE: JPM | LONG | 156.40 | 169.50 | 150.00 | CONFIDENT | Score 12, $9.19M calls/$0 puts, above MAs, 2:1 R:R. Testing: do exceptional options beat overbought technicals?
 
-For each new trade meeting criteria output:
-NEW_TRADE: [TICKER] | [LONG/SHORT] | [ENTRY_PRICE] | [TARGET] | [STOP_LOSS] | [CONFIDENCE] | [REASONING]
-
-**If no setups meet the ULTRA-SELECTIVE criteria:**
+**If genuinely no setups meet MINIMUM REQUIREMENTS (score 10+, 2:1 R:R):**
 NO_TRADE: [Explain which criteria failed]
-Example: "NO_TRADE: Only 2 candidates (MSFT, GOOGL) — both score <11 and lack 2+ confirmers. Waiting for higher-conviction setups."
+Example: "NO_TRADE: MSFT score 8, GOOGL score 9 — both below 10 minimum. No viable trades today."
 
-**EXPECTED OUTCOME:** 2-3 NEW_TRADE suggestions per analysis (not 5-10).
-If you see 0 trades after a day of analysis, that's GOOD — means we're waiting for quality.
+**EXPECTED OUTCOME:** 2-3+ NEW_TRADE suggestions PER ANALYSIS on active days.
+Some days 1, some days 5. This variation is GOOD — it's testing different market conditions.
 
 PART 3 — FORMAT YOUR FULL ANALYSIS IN THIS EXACT ORDER:
 

@@ -47,11 +47,18 @@ def get_portfolio_balance():
 
 def set_portfolio_balance(balance):
     try:
-        url = f"{get_base_url()}/rest/v1/portfolio_state"
-        httpx.post(url, headers=get_headers(), json={
-            "key": "balance",
-            "value": str(balance)
+        url = f"{get_base_url()}/rest/v1/portfolio_state?key=eq.balance"
+        response = httpx.patch(url, headers=get_headers(), json={
+            "value": str(round(balance, 2))
         })
+
+        # Fallback to POST if PATCH fails
+        if response.status_code not in (200, 204):
+            url = f"{get_base_url()}/rest/v1/portfolio_state"
+            httpx.post(url, headers=get_headers(), json={
+                "key": "balance",
+                "value": str(round(balance, 2))
+            })
     except Exception as e:
         print(f"Balance set error: {e}")
 
@@ -122,13 +129,20 @@ def open_position(ticker, direction, entry_price, target_price, stop_loss,
 
         # Deduct from balance only after confirmed insert
         new_balance = balance - position_size
-        url2 = f"{get_base_url()}/rest/v1/portfolio_state"
-        httpx.post(url2, headers=get_headers(), json={
-            "key": "balance",
-            "value": str(new_balance)
+        url2 = f"{get_base_url()}/rest/v1/portfolio_state?key=eq.balance"
+        response = httpx.patch(url2, headers=get_headers(), json={
+            "value": str(round(new_balance, 2))
         })
 
-        print(f"✅ Opened {direction} position in {ticker} — size £{position_size} — confidence {confidence}")
+        # Fallback to POST if PATCH fails
+        if response.status_code not in (200, 204):
+            url2 = f"{get_base_url()}/rest/v1/portfolio_state"
+            httpx.post(url2, headers=get_headers(), json={
+                "key": "balance",
+                "value": str(round(new_balance, 2))
+            })
+
+        print(f"✅ Opened {direction} position in {ticker} — size £{position_size:.2f} — confidence {confidence}")
         print(f"   Balance: £{balance:.2f} → £{new_balance:.2f}")
         return True
 
@@ -148,13 +162,18 @@ def close_position(position_id, exit_price, reason):
         position = positions[0]
         entry_price = float(position["entry_price"])
         position_size = float(position["position_size"])
+        direction = position.get("direction", "LONG")
 
-        # Calculate P&L
-        pnl_pct = ((exit_price - entry_price) / entry_price) * 100
+        # Calculate P&L (handle both LONG and SHORT positions)
+        if direction == "LONG":
+            pnl_pct = ((exit_price - entry_price) / entry_price) * 100
+        else:  # SHORT
+            pnl_pct = ((entry_price - exit_price) / entry_price) * 100
+
         pnl = position_size * (pnl_pct / 100)
         return_amount = position_size + pnl
 
-        # Update position
+        # Update position with closed status and P&L
         update_url = f"{get_base_url()}/rest/v1/positions?id=eq.{position_id}"
         httpx.patch(update_url, headers=get_headers(), json={
             "status": "CLOSED",
@@ -165,16 +184,25 @@ def close_position(position_id, exit_price, reason):
             "claude_reasoning": reason
         })
 
-        # Return capital + P&L to balance
+        # Return capital + P&L to balance (critical: position_size + pnl)
         balance = get_portfolio_balance()
         new_balance = balance + return_amount
-        url2 = f"{get_base_url()}/rest/v1/portfolio_state"
-        httpx.post(url2, headers=get_headers(), json={
-            "key": "balance",
-            "value": str(new_balance)
+
+        # Use PATCH to update the balance to ensure atomicity
+        url2 = f"{get_base_url()}/rest/v1/portfolio_state?key=eq.balance"
+        response = httpx.patch(url2, headers=get_headers(), json={
+            "value": str(round(new_balance, 2))
         })
 
-        print(f"✅ Closed {position['ticker']} at £{exit_price} — P&L: £{round(pnl, 2)} ({round(pnl_pct, 2)}%)")
+        if response.status_code not in (200, 204):
+            # Fallback to POST if PATCH fails
+            url2 = f"{get_base_url()}/rest/v1/portfolio_state"
+            httpx.post(url2, headers=get_headers(), json={
+                "key": "balance",
+                "value": str(round(new_balance, 2))
+            })
+
+        print(f"✅ Closed {position['ticker']} ({direction}) at £{exit_price} — P&L: £{round(pnl, 2)} ({round(pnl_pct, 2)}%)")
         print(f"   Balance: £{balance:.2f} → £{new_balance:.2f} (returned £{round(return_amount, 2)})")
         return pnl
 

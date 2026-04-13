@@ -273,7 +273,7 @@ def calculate_adx(hist, period=14):
         close = hist["Close"]
 
         plus_dm = high.diff()
-        minus_dm = low.diff().abs()
+        minus_dm = (low.shift() - low).abs()  # yesterday's low - today's low (corrected)
 
         plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
         minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
