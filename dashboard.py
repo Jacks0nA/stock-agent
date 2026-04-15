@@ -363,7 +363,17 @@ def run_full_analysis(mode="Manual", market_is_open=True):
                 shortlist, market_regime = result
                 screening_summary = {"total_screened": 0, "buy_signals": 0, "watch_signals": 0, "all_results": []}
 
+        # Determine which stocks to analyze (priority: shortlist > top analyzed > none)
         tickers = [r["ticker"] for r in shortlist]
+        all_results = screening_summary.get("all_results", [])
+        is_learning_mode = False
+
+        # If no BUY/WATCH signals but we have analyzed stocks, use top ones for learning
+        if not tickers and all_results:
+            is_learning_mode = True
+            top_analyzed = sorted(all_results, key=lambda x: abs(x.get("score", 0)), reverse=True)[:10]
+            tickers = [r["ticker"] for r in top_analyzed]
+            st.info("📚 **Learning Mode**: Showing full analysis of top analyzed stocks (even without BUY signals)")
 
         # Stage 2: Market Context (always show, regardless of screener results)
         with st.spinner("Stage 2 — Fetching market context..."):
@@ -382,19 +392,29 @@ def run_full_analysis(mode="Manual", market_is_open=True):
 
         # Show screener results if any found
         if tickers:
-            buy_signals = [r for r in shortlist if r["signal"] == "BUY"]
-            avoid_signals = [r for r in shortlist if r["signal"] == "AVOID"]
-            watch_signals = [r for r in shortlist if r["signal"] == "WATCH"]
+            if not is_learning_mode:
+                # Normal mode: show BUY/AVOID/WATCH signals
+                buy_signals = [r for r in shortlist if r["signal"] == "BUY"]
+                avoid_signals = [r for r in shortlist if r["signal"] == "AVOID"]
+                watch_signals = [r for r in shortlist if r["signal"] == "WATCH"]
 
-            col1, col2, col3 = st.columns(3)
-            col1.metric("🟢 Buy", len(buy_signals))
-            col2.metric("🔴 Avoid", len(avoid_signals))
-            col3.metric("⚪ Watch", len(watch_signals))
+                col1, col2, col3 = st.columns(3)
+                col1.metric("🟢 Buy", len(buy_signals))
+                col2.metric("🔴 Avoid", len(avoid_signals))
+                col3.metric("⚪ Watch", len(watch_signals))
 
-            st.subheader("Shortlisted Assets")
-            for r in shortlist:
-                action_label = r.get("action_label", "⚪ NEUTRAL")
-                st.write(f"{action_label} — **{r['ticker']}** — ${r['price']} — Score: {r['score']}")
+                st.subheader("Shortlisted Assets")
+                for r in shortlist:
+                    action_label = r.get("action_label", "⚪ NEUTRAL")
+                    st.write(f"{action_label} — **{r['ticker']}** — ${r['price']} — Score: {r['score']}")
+            else:
+                # Learning mode: show top analyzed stocks with scores
+                st.subheader("Top Analyzed Stocks (Learning Data)")
+                top_analyzed = sorted(all_results, key=lambda x: abs(x.get("score", 0)), reverse=True)[:10]
+                for r in top_analyzed[:len(tickers)]:
+                    signal = r.get("signal", "SKIP")
+                    emoji = "🟢" if signal == "BUY" else "🔴" if signal == "AVOID" else "⚪"
+                    st.write(f"{emoji} **{r['ticker']}** — Score: {r['score']:.1f} — Signal: {signal} — ${r['price']:.2f}")
 
             with st.spinner("Fetching live prices..."):
                 df = fetch_stock_data(tickers)
@@ -439,9 +459,14 @@ def run_full_analysis(mode="Manual", market_is_open=True):
                 )
 
             st.subheader("Claude's Analysis")
+            if is_learning_mode:
+                st.info("📚 **Learning Mode Analysis**: Why these top candidates didn't trigger BUY signals and what to look for next")
             st.write(analysis)
 
-            log_file = save_daily_log(analysis, mode=mode, tickers=tickers)
+            if is_learning_mode:
+                log_file = save_daily_log(analysis, mode="Learning", tickers=tickers)
+            else:
+                log_file = save_daily_log(analysis, mode=mode, tickers=tickers)
             st.success(f"Saved to {log_file}")
 
             return analysis, tickers
