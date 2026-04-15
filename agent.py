@@ -17,10 +17,25 @@ from portfolio import (
 from trade_analyzer import analyze_closed_positions, get_playbook_context_for_claude
 
 from prediction_tracker import get_accuracy_summary
+from datetime import datetime, timezone
 
 load_dotenv()
 
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+# Daily trade limits to prevent over-trading
+MAX_TRADES_PER_DAY = 3
+TRADES_OPENED_TODAY = []
+
+def count_trades_opened_today():
+    """Count how many trades were opened today"""
+    try:
+        open_positions = get_open_positions()
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today_trades = [p for p in open_positions if p.get("opened_at", "").startswith(today)]
+        return len(today_trades)
+    except Exception:
+        return 0
 
 HIGH_ACCURACY_ASSETS = {
     "SNAP": 80.0,
@@ -620,9 +635,14 @@ def execute_trade_decisions(analysis_text, historical, options_summary,
                 position_size = CONFIDENCE_SIZES.get(confidence, 100.0)
                 balance = get_portfolio_balance()
                 current_open = len(get_open_positions())
+                trades_today = count_trades_opened_today()
 
                 if current_open >= MAX_POSITIONS:
                     st.warning(f"Max positions ({MAX_POSITIONS}) reached — {ticker} skipped.")
+                    continue
+
+                if trades_today >= MAX_TRADES_PER_DAY:
+                    st.warning(f"Daily trade limit ({MAX_TRADES_PER_DAY}) reached — {ticker} skipped. ({trades_today}/{MAX_TRADES_PER_DAY} trades opened today)")
                     continue
 
                 if position_size > balance:
