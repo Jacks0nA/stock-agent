@@ -994,7 +994,16 @@ def run_screen(tickers=None, use_cache=True):
         if monthly_summary.get("improvement"):
             print(f"   Improvement vs baseline: +{monthly_summary['improvement']:.1f}%")
 
-    return shortlist, regime
+    # Return tuple with shortlist and comprehensive screening data for learning
+    screening_summary = {
+        "total_screened": len(results),
+        "buy_signals": len(buy),
+        "watch_signals": len(watch),
+        "all_results": results,  # All analyzed stocks for learning
+        "shortlist": shortlist,  # Filtered shortlist for trading
+    }
+
+    return shortlist, regime, screening_summary
 
 if __name__ == "__main__":
     run_screen()

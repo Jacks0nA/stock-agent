@@ -355,7 +355,13 @@ def run_full_analysis(mode="Manual", market_is_open=True):
     try:
         # Stage 1: Screening
         with st.spinner("Stage 1 — Screening assets..."):
-            shortlist, market_regime = run_screen()
+            result = run_screen()
+            # Handle both old (2-value) and new (3-value) return formats
+            if len(result) == 3:
+                shortlist, market_regime, screening_summary = result
+            else:
+                shortlist, market_regime = result
+                screening_summary = {"total_screened": 0, "buy_signals": 0, "watch_signals": 0, "all_results": []}
 
         tickers = [r["ticker"] for r in shortlist]
 
@@ -440,13 +446,34 @@ def run_full_analysis(mode="Manual", market_is_open=True):
 
             return analysis, tickers
         else:
-            st.warning("⚠️ No new assets matched the screening criteria.")
-            st.info("Showing market analysis and current positions for context...")
+            st.warning("⚠️ No BUY signals found in current market conditions.")
 
-            # Show market regime analysis
+            # Show comprehensive screening data for learning
             st.divider()
-            st.subheader("📊 Market Analysis")
-            st.write(f"**Current Regime:** {market_regime}")
+            st.subheader("📊 Screening Summary (Learning Data)")
+
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Screened", screening_summary.get("total_screened", 0))
+            col2.metric("🟢 BUY Signals", screening_summary.get("buy_signals", 0))
+            col3.metric("⚪ WATCH Signals", screening_summary.get("watch_signals", 0))
+
+            # Show market regime
+            st.write(f"**Market Regime:** {market_regime}")
+
+            # Show top analyzed stocks (for learning, even if they didn't trigger buy signals)
+            all_results = screening_summary.get("all_results", [])
+            if all_results:
+                st.subheader("Top Analyzed Stocks (by score)")
+                top_stocks = sorted(all_results, key=lambda x: abs(x.get("score", 0)), reverse=True)[:10]
+
+                for stock in top_stocks:
+                    ticker = stock.get("ticker", "N/A")
+                    score = stock.get("score", 0)
+                    signal = stock.get("signal", "SKIP")
+                    price = stock.get("price", 0)
+                    moat = stock.get("moat_score", 2.5)
+                    emoji = "🟢" if signal == "BUY" else "⚪" if signal == "WATCH" else "🔴"
+                    st.write(f"{emoji} **{ticker}** — Score: {score:.1f} | Signal: {signal} | Price: ${price:.2f} | Moat: {moat:.1f}/5")
 
             # Show portfolio positions if any exist
             try:
@@ -468,7 +495,7 @@ def run_full_analysis(mode="Manual", market_is_open=True):
                 st.info("No portfolio data available yet.")
 
             st.divider()
-            st.info("💡 Continue monitoring. New opportunities will appear when market conditions align with your screening criteria.")
+            st.info("💡 **Learning Mode:** Showing all analyzed stocks for the agent to learn from. BUY signals will appear when market conditions align with your screening criteria.")
     finally:
         st.session_state.analysis_running = False
 
