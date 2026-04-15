@@ -36,6 +36,10 @@ from insider import get_insider_summary
 from options import get_options_summary
 from logger import save_daily_log, get_all_dates, get_log_for_date_window, read_log_file, delete_date_logs
 from deep_dive import run_deep_dive
+from monte_carlo_dashboard import display_monte_carlo_dashboard
+from backtest_analyzer import get_backtest_metrics, format_backtest_report
+from sector_rotation import SectorRotationStrategy
+from alerts import alert_manager
 from portfolio import (
     get_portfolio_balance, get_open_positions, get_closed_positions,
     get_current_prices, STARTING_BALANCE
@@ -480,7 +484,7 @@ if autorefresh_available:
     interval = 600000 if st.session_state.analysis_running else 60000
     st_autorefresh(interval=interval, key="autorefresh")
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["Analysis", "Portfolio", "Logs", "Deep Dive", "Learning"])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(["Analysis", "Portfolio", "Logs", "Deep Dive", "Learning", "🎲 Monte Carlo", "📊 Backtest", "🌍 Sector Rotation", "🔔 Alerts"])
 
 with tab1:
     if mode == "Manual":
@@ -1121,3 +1125,362 @@ with tab5:
 
         else:
             st.info("🤖 Pattern recognition needs more closed trades to learn from. Close trades to build your playbook!")
+
+with tab6:
+    display_monte_carlo_dashboard()
+
+with tab7:
+    st.subheader("📊 Backtest Analysis")
+    st.caption("Historical strategy performance validation — Based on 2-year backtest data")
+
+    # Get backtest metrics
+    metrics = get_backtest_metrics()
+
+    if "error" in metrics:
+        st.warning(f"⚠️ {metrics.get('error', 'Could not load backtest data')}")
+        st.info("Run a backtest first using the Analysis tab to generate results.")
+    else:
+        # Summary metrics
+        summary = metrics.get("summary", {})
+        rar = metrics.get("risk_adjusted_returns", {})
+        regime = metrics.get("regime_analysis", {})
+        perf = metrics.get("performance_summary", {})
+
+        # Key metrics row
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric(
+                "Total Trades",
+                summary.get("total_trades", 0),
+                help="Total number of trades in backtest period"
+            )
+
+        with col2:
+            st.metric(
+                "Win Rate",
+                summary.get("win_rate", "N/A"),
+                help=f"Winners: {summary.get('winning_trades', 0)} | Losers: {summary.get('losing_trades', 0)}"
+            )
+
+        with col3:
+            st.metric(
+                "Net P&L",
+                summary.get("net_pnl", "N/A"),
+                help="Total profit/loss across all trades"
+            )
+
+        with col4:
+            st.metric(
+                "Profit Factor",
+                rar.get("profit_factor", 0),
+                help="Gross profit ÷ Gross loss (>1.5 is good)"
+            )
+
+        st.divider()
+
+        # Risk-Adjusted Returns
+        st.subheader("📈 Risk-Adjusted Returns")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            sharpe = rar.get("sharpe_ratio", 0)
+            color = "🟢" if sharpe > 1.0 else "🟡" if sharpe > 0.5 else "🔴"
+            st.metric(
+                f"{color} Sharpe Ratio",
+                sharpe,
+                help="Return ÷ Volatility (>1.0 = excellent)"
+            )
+
+        with col2:
+            sortino = rar.get("sortino_ratio", 0)
+            color = "🟢" if sortino > 1.5 else "🟡" if sortino > 1.0 else "🔴"
+            st.metric(
+                f"{color} Sortino Ratio",
+                sortino,
+                help="Return ÷ Downside Volatility (>1.5 = excellent)"
+            )
+
+        with col3:
+            st.metric(
+                "Max Drawdown",
+                rar.get("max_drawdown", "N/A"),
+                help="Largest peak-to-trough decline"
+            )
+
+        st.divider()
+
+        # Regime Performance
+        st.subheader("🎯 Performance by Market Regime")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.info(
+                f"🟢 **BULL Market Performance**\n\n"
+                f"Trades: {regime.get('bull_trades', 0)}\n"
+                f"Win Rate: {regime.get('bull_win_rate', 'N/A')}"
+            )
+
+        with col2:
+            st.warning(
+                f"🔴 **BEAR Market Performance**\n\n"
+                f"Trades: {regime.get('bear_trades', 0)}\n"
+                f"Win Rate: {regime.get('bear_win_rate', 'N/A')}"
+            )
+
+        st.divider()
+
+        # Per-Trade Metrics
+        st.subheader("💰 Per-Trade Metrics")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                "Avg Win",
+                perf.get("avg_win", "N/A"),
+                help="Average profit on winning trades"
+            )
+
+        with col2:
+            st.metric(
+                "Avg Loss",
+                perf.get("avg_loss", "N/A"),
+                help="Average loss on losing trades"
+            )
+
+        with col3:
+            st.metric(
+                "Payoff Ratio",
+                perf.get("payoff_ratio", "N/A"),
+                help="Avg Win ÷ Avg Loss (>1.5 is good)"
+            )
+
+        st.divider()
+
+        # Full Report
+        with st.expander("📋 Full Backtest Report", expanded=False):
+            report = format_backtest_report()
+            st.code(report, language="text")
+
+        st.success("✅ Backtest validation complete. Monitor these metrics as new trades close.")
+
+with tab8:
+    st.subheader("🌍 Sector Rotation Strategy")
+    st.caption("Dynamic sector ranking by momentum, relative strength, RSI, and volatility")
+
+    # Calculate sector scores
+    with st.spinner("Calculating sector rotation..."):
+        strategy = SectorRotationStrategy()
+        scores = strategy.calculate_sector_scores()
+
+    # Get allocation recommendations
+    allocation = strategy.allocate_portfolio(current_positions=[], capital=10000)
+
+    # Display as ranked list with metrics
+    st.subheader("📊 Sector Rankings (1-9)")
+
+    # Create a dataframe for display
+    sector_data = []
+    for etf, data in scores.items():
+        rank = strategy.sector_ranks.get(etf)
+        sector_data.append({
+            "Rank": rank,
+            "Sector": f"{etf} - {data['name']}",
+            "Score": data['score'],
+            "Momentum": f"{data['momentum']:+.1f}%",
+            "RS vs SPY": f"{data['relative_strength']:+.1f}%",
+            "RSI": f"{data['rsi']:.0f}",
+            "Volatility": f"{data['volatility']:.2f}%"
+        })
+
+    sector_df = pd.DataFrame(sector_data).sort_values("Rank")
+    st.dataframe(sector_df, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # Allocation recommendations
+    st.subheader("💼 Recommended Allocation")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.success(
+            f"🟢 **TOP 3 SECTORS (40% allocation)**\n\n"
+            f"Buy momentum, lead markets"
+        )
+        top_3 = [d for d in sector_data if d["Rank"] <= 3]
+        for item in top_3:
+            st.caption(f"{item['Rank']}. {item['Sector']}")
+
+    with col2:
+        st.info(
+            f"⚪ **MIDDLE 3 SECTORS (35% allocation)**\n\n"
+            f"Hold, balanced exposure"
+        )
+        mid_3 = [d for d in sector_data if 4 <= d["Rank"] <= 6]
+        for item in mid_3:
+            st.caption(f"{item['Rank']}. {item['Sector']}")
+
+    with col3:
+        st.warning(
+            f"🔴 **BOTTOM 3 SECTORS (25% allocation)**\n\n"
+            f"Avoid or reduce exposure"
+        )
+        bot_3 = [d for d in sector_data if d["Rank"] >= 7]
+        for item in bot_3:
+            st.caption(f"{item['Rank']}. {item['Sector']}")
+
+    st.divider()
+
+    # Key metrics explanation
+    with st.expander("📖 How Sector Rotation Works", expanded=False):
+        st.markdown("""
+        **Momentum (20-day return)**
+        - How much the sector ETF is up/down over the last 20 trading days
+        - Positive = bullish, Negative = bearish
+
+        **Relative Strength vs SPY**
+        - Sector return minus SPY return
+        - Positive = sector outperforming market
+        - Negative = sector underperforming market
+
+        **RSI (14-period)**
+        - Relative Strength Index for mean reversion
+        - RSI < 30 = oversold (potential bounce)
+        - RSI > 70 = overbought (potential pullback)
+
+        **Volatility**
+        - 20-day standard deviation of returns
+        - Lower = safer, more stable sector
+        - Higher = riskier, more volatile sector
+
+        **Score Formula**
+        - Score = (Momentum + RS) × RSI_factor - Volatility_penalty
+        - Oversold sectors (RSI < 30) get 1.2x boost
+        - Overbought sectors (RSI > 70) get 0.8x penalty
+        """)
+
+    st.success("✅ Sector rotation integrated into screener. Top sectors receive +3 score boost, bottom sectors get -2 penalty.")
+
+with tab9:
+    st.subheader("🔔 Alert History")
+    st.caption("Real-time notifications for portfolio events")
+
+    # Get recent alerts
+    recent_alerts = alert_manager.get_alert_history(hours=24, limit=50)
+
+    if not recent_alerts:
+        st.info("📭 No alerts in the last 24 hours. Trade activity will appear here.")
+    else:
+        # Filter options
+        col1, col2 = st.columns(2)
+
+        with col1:
+            alert_types = ["All"] + list(set([a["type"] for a in recent_alerts]))
+            selected_type = st.selectbox("Filter by type:", alert_types)
+
+        with col2:
+            priority_levels = ["All"] + list(set([a["priority"] for a in recent_alerts]))
+            selected_priority = st.selectbox("Filter by priority:", priority_levels)
+
+        # Filter alerts
+        filtered_alerts = recent_alerts
+
+        if selected_type != "All":
+            filtered_alerts = [a for a in filtered_alerts if a["type"] == selected_type]
+
+        if selected_priority != "All":
+            filtered_alerts = [a for a in filtered_alerts if a["priority"] == selected_priority]
+
+        st.divider()
+
+        # Display alerts
+        if not filtered_alerts:
+            st.warning("No alerts matching filter criteria.")
+        else:
+            # Group by priority
+            critical = [a for a in filtered_alerts if a["priority"] == "CRITICAL"]
+            high = [a for a in filtered_alerts if a["priority"] == "HIGH"]
+            medium = [a for a in filtered_alerts if a["priority"] == "MEDIUM"]
+            low = [a for a in filtered_alerts if a["priority"] == "LOW"]
+
+            # Display critical alerts first
+            if critical:
+                st.subheader("🔴 CRITICAL")
+                for alert in critical:
+                    with st.container(border=True):
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.markdown(
+                                f"**{alert['type']}** — {alert['ticker']}\n\n"
+                                f"{alert['trigger']}"
+                            )
+                        with col2:
+                            time_str = datetime.fromisoformat(alert['timestamp']).strftime("%H:%M:%S")
+                            st.caption(time_str)
+
+            # Display high priority
+            if high:
+                st.subheader("🟠 HIGH")
+                for alert in high:
+                    with st.container(border=True):
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.markdown(
+                                f"**{alert['type']}** — {alert['ticker']}\n\n"
+                                f"{alert['trigger']}"
+                            )
+                        with col2:
+                            time_str = datetime.fromisoformat(alert['timestamp']).strftime("%H:%M:%S")
+                            st.caption(time_str)
+
+            # Display medium/low collapsed
+            if medium or low:
+                with st.expander(f"📋 Medium/Low Priority ({len(medium) + len(low)} alerts)"):
+                    for alert in medium + low:
+                        with st.container(border=True):
+                            col1, col2 = st.columns([3, 1])
+                            with col1:
+                                st.markdown(
+                                    f"**{alert['type']}** — {alert['ticker']}\n\n"
+                                    f"{alert['trigger']}"
+                                )
+                            with col2:
+                                time_str = datetime.fromisoformat(alert['timestamp']).strftime("%H:%M:%S")
+                                st.caption(time_str)
+
+        st.divider()
+
+        # Summary stats
+        st.subheader("📊 Alert Statistics")
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("Total Alerts (24h)", len(recent_alerts))
+
+        with col2:
+            critical_count = len([a for a in recent_alerts if a["priority"] == "CRITICAL"])
+            st.metric("🔴 Critical", critical_count)
+
+        with col3:
+            high_count = len([a for a in recent_alerts if a["priority"] == "HIGH"])
+            st.metric("🟠 High", high_count)
+
+        with col4:
+            by_type = {}
+            for alert in recent_alerts:
+                by_type[alert["type"]] = by_type.get(alert["type"], 0) + 1
+            most_common = max(by_type.items(), key=lambda x: x[1])[0]
+            st.metric("Most Common", most_common)
+
+    st.info(
+        "💡 **Alert Channels:**\n\n"
+        "• 📱 Console: All alerts logged\n"
+        "• 📧 Email: Critical alerts + daily digest (if configured)\n"
+        "• 📱 Slack: Real-time alerts via webhook (if configured)\n\n"
+        "Configure in .env: `SLACK_WEBHOOK_URL`, `EMAIL_SERVICE`, `ALERT_EMAIL`"
+    )

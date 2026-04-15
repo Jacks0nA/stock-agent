@@ -8,6 +8,9 @@ from monte_carlo import get_monte_carlo_analysis
 from monte_carlo_learning import learning_system, print_learning_report
 from debate_framework import debate_stock, format_debate_summary
 from cross_validation import validate_stock
+from moat_scorer import score_moat
+from regime_detector import detect_regime
+from sector_rotation import SectorRotationStrategy
 
 # Cache file for screening results (expires after 1 hour)
 CACHE_FILE = "/tmp/screener_cache.json"
@@ -118,21 +121,38 @@ def get_all_tickers():
 
 def get_market_regime():
     """
-    Returns BULL, BEAR, or NEUTRAL based on SPY vs its 50MA.
-    BEAR suppresses BUY signals entirely.
+    Returns market regime (BULL/BEAR/RANGING) using multi-signal detection.
+
+    Signals:
+    - SPY trend (50MA vs 200MA)
+    - Volatility (VIX level)
+    - Breadth (growth vs value participation)
+
+    Returns: (regime_string, current_spy_price, spy_50ma)
     """
     try:
+        # Use new regime detector
+        regime_result = detect_regime()
+        regime = regime_result.get("regime", "RANGING")
+        confidence = regime_result.get("confidence", 0)
+
+        # Get SPY price for display
         spy = yf.Ticker("SPY")
-        hist = spy.history(period="3mo")
+        hist = spy.history(period="1y")
         hist.index = hist.index.tz_localize(None)
-        current = hist["Close"].iloc[-1]
-        ma50 = hist["Close"].rolling(window=50).mean().iloc[-1]
-        if current > ma50:
-            return "BULL", round(current, 2), round(ma50, 2)
-        else:
-            return "BEAR", round(current, 2), round(ma50, 2)
-    except Exception:
-        return "NEUTRAL", None, None
+
+        current_spy = round(hist["Close"].iloc[-1], 2)
+        spy_50ma = round(hist["Close"].rolling(window=50).mean().iloc[-1], 2)
+
+        print(f"🔍 Regime Detection:")
+        print(f"   Regime: {regime} (Confidence: {confidence*100:.0f}%)")
+        print(f"   Interpretation: {regime_result.get('interpretation', '')}")
+
+        return regime, current_spy, spy_50ma
+
+    except Exception as e:
+        print(f"⚠️ Regime detection error: {str(e)[:50]} — defaulting to RANGING")
+        return "RANGING", None, None
 
 def get_sector_rsi(ticker):
     """
@@ -393,7 +413,7 @@ def assign_action_label(result):
     # Default neutral
     return "⚪ NEUTRAL"
 
-def screen_ticker(ticker, market_regime="BULL"):
+def screen_ticker(ticker, market_regime="BULL", sector_strategy=None):
     try:
         stock = yf.Ticker(ticker)
         hist = stock.history(period="1y")
@@ -651,24 +671,70 @@ def screen_ticker(ticker, market_regime="BULL"):
         if volume_consistent and change_pct < 0:  # Conviction
             strong_bearish += 1
 
-        # BUY: score 10+ AND 2+ strong bullish signals
-        if score >= 10 and strong_bullish >= 2:
+        # REGIME-AWARE SIGNAL THRESHOLDS
+        # Adjust thresholds based on market regime
+        if market_regime == "BULL":
+            # Bull markets: lower thresholds (favor growth/momentum)
+            buy_threshold = 9  # Lower than default 10
+            strong_signal_count = 2
+        elif market_regime == "BEAR":
+            # Bear markets: higher thresholds (favor defensive/high conviction)
+            buy_threshold = 12  # Higher than default 10
+            strong_signal_count = 2
+        else:  # RANGING
+            # Ranging markets: standard thresholds
+            buy_threshold = 10
+            strong_signal_count = 2
+
+        # BUY Signal Logic
+        if score >= buy_threshold and strong_bullish >= strong_signal_count:
             if market_regime == "BEAR":
                 signal = "WATCH"
-                reasons.append("BUY suppressed — bear market regime (SPY below 50MA)")
+                reasons.append(f"BUY suppressed — bear market regime (requires score {buy_threshold}+, need 75%+ recovery prob)")
             elif near_earnings:
                 signal = "WATCH"
                 reasons.append("BUY suppressed — within earnings exclusion window")
             else:
                 signal = "BUY"
-        # AVOID: score -10 or lower AND 2+ strong bearish signals
-        elif score <= -10 and strong_bearish >= 2:
+        # AVOID: score lower bound AND 2+ strong bearish signals
+        elif score <= -buy_threshold and strong_bearish >= strong_signal_count:
             signal = "AVOID"
-        # WATCH: marginal setups (score 7-9 with some confirmation)
-        elif (score >= 7 and strong_bullish >= 1) or (abs(score) >= 5 and check_signal_quality(score, rsi, near_support, bullish_momentum, near_resistance, bearish_momentum)):
+        # WATCH: marginal setups (score 7-9 with some confirmation, regime-adjusted)
+        elif (score >= (buy_threshold - 1) and strong_bullish >= 1) or (abs(score) >= 5 and check_signal_quality(score, rsi, near_support, bullish_momentum, near_resistance, bearish_momentum)):
             signal = "WATCH"
         else:
             signal = "NEUTRAL"
+
+        # Calculate moat score (competitive advantage analysis)
+        try:
+            moat_result = score_moat(ticker)
+            moat_score = moat_result.get("moat_score", 2.5)
+            moat_strength = moat_result.get("strength", "UNKNOWN")
+        except Exception as e:
+            moat_score = 2.5
+            moat_strength = "UNKNOWN"
+
+        # SECTOR ROTATION: Apply sector boost/penalty
+        sector_boost = 0
+        sector_rank = "N/A"
+        if sector_strategy:
+            try:
+                # Check which sector this ticker belongs to
+                etf = SECTOR_ETFS.get(ticker)
+                if etf:
+                    # Get sector rank from strategy
+                    sector_ranks = sector_strategy.sector_ranks
+                    sector_rank = sector_ranks.get(etf, 5)  # Default to middle rank
+                    sector_boost = sector_strategy.get_screener_boost(sector_rank)
+
+                    if sector_boost > 0:
+                        reasons.append(f"✅ Top sector (rank {sector_rank}) — sector rotation boost +{sector_boost}")
+                    elif sector_boost < 0:
+                        reasons.append(f"⚠️ Lagging sector (rank {sector_rank}) — sector rotation penalty {sector_boost}")
+
+                    score += sector_boost
+            except Exception as e:
+                pass  # Sector rotation error shouldn't break screening
 
         result_dict = {
             "ticker": ticker,
@@ -696,6 +762,10 @@ def screen_ticker(ticker, market_regime="BULL"):
             "gap_up": gap_up,
             "near_earnings": near_earnings,
             "sector_rsi": sector_rsi,
+            "moat_score": moat_score,
+            "moat_strength": moat_strength,
+            "sector_rank": sector_rank,
+            "sector_boost": sector_boost,
             "score": score,
             "signal": signal,
             "reasons": reasons
@@ -756,11 +826,17 @@ def run_screen(tickers=None, use_cache=True):
     if regime == "BEAR":
         print("WARNING: Bear market regime — BUY signals suppressed")
 
+    # SECTOR ROTATION: Calculate sector scores
+    print(f"\n🌍 Calculating sector rotation strategy...")
+    sector_strategy = SectorRotationStrategy()
+    sector_scores = sector_strategy.calculate_sector_scores()
+    print(f"   Sectors ranked 1-9 by momentum, relative strength, and RSI")
+
     print(f"\nScreening {len(tickers)} assets...")
 
     results = []
     for i, ticker in enumerate(tickers):
-        result = screen_ticker(ticker, market_regime=regime)
+        result = screen_ticker(ticker, market_regime=regime, sector_strategy=sector_strategy)
         if result:
             results.append(result)
         if (i + 1) % 20 == 0:
@@ -797,12 +873,25 @@ def run_screen(tickers=None, use_cache=True):
             item["downside_risk"] = mc_data.get("downside_risk", 0)
             item["upside_potential"] = mc_data.get("upside_potential", 0)
 
-            # Boost score if recovery probability is high (indicates quality trade)
-            if item["recovery_probability"] > 0.70:
-                item["score"] += 5  # Boost high-recovery trades
+            # Boost score if recovery probability is high (regime-aware)
+            # BULL market: 50%+ recovery prob is enough for boost
+            # BEAR market: require 75%+ for boost (stricter)
+            # RANGING: 60%+ is sufficient
+            if regime == "BULL":
+                recovery_threshold = 0.50
+                strong_recovery_threshold = 0.70
+            elif regime == "BEAR":
+                recovery_threshold = 0.75
+                strong_recovery_threshold = 0.85
+            else:  # RANGING
+                recovery_threshold = 0.60
+                strong_recovery_threshold = 0.75
+
+            if item["recovery_probability"] > strong_recovery_threshold:
+                item["score"] += 5  # Strong recovery boost
                 item["mc_signal"] = "STRONG RECOVERY"
-            elif item["recovery_probability"] > 0.50:
-                item["score"] += 2
+            elif item["recovery_probability"] > recovery_threshold:
+                item["score"] += 2  # Moderate recovery boost
                 item["mc_signal"] = "MODERATE RECOVERY"
             else:
                 item["mc_signal"] = "WEAK RECOVERY"
