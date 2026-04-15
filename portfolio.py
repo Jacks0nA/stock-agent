@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 import yfinance as yf
 from kelly_criterion import kelly_from_historical_trades, get_position_size
+from monte_carlo_learning import learning_system
 
 load_dotenv()
 
@@ -173,6 +174,14 @@ def close_position(position_id, exit_price, reason):
         pnl = position_size * (pnl_pct / 100)
         return_amount = position_size + pnl
 
+        # AUTO-LEARNING: Log actual result to Monte Carlo learning system (Change #15)
+        # This lets Monte Carlo adjust its predictions based on real outcomes
+        try:
+            ticker = position.get("ticker", "UNKNOWN")
+            learning_system.record_actual_result(ticker, pnl_pct)
+        except Exception as e:
+            pass  # Learning logging should never break position closing
+
         # Update position with closed status and P&L
         update_url = f"{get_base_url()}/rest/v1/positions?id=eq.{position_id}"
         httpx.patch(update_url, headers=get_headers(), json={
@@ -204,6 +213,7 @@ def close_position(position_id, exit_price, reason):
 
         print(f"✅ Closed {position['ticker']} ({direction}) at £{exit_price} — P&L: £{round(pnl, 2)} ({round(pnl_pct, 2)}%)")
         print(f"   Balance: £{balance:.2f} → £{new_balance:.2f} (returned £{round(return_amount, 2)})")
+        print(f"   🧠 Learning system updated (Monte Carlo auto-learning)")
         return pnl
 
     except Exception as e:
