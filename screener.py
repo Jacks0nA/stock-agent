@@ -7,6 +7,7 @@ import os
 from monte_carlo import get_monte_carlo_analysis
 from monte_carlo_learning import learning_system, print_learning_report
 from debate_framework import debate_stock, format_debate_summary
+from cross_validation import validate_stock
 
 # Cache file for screening results (expires after 1 hour)
 CACHE_FILE = "/tmp/screener_cache.json"
@@ -812,12 +813,34 @@ def run_screen(tickers=None, use_cache=True):
     # Re-sort by updated score (now includes Monte Carlo boost)
     shortlist.sort(key=lambda x: x["score"], reverse=True)
 
-    print(f"\nSHORTLIST WITH ACTION LABELS & RECOVERY PROBABILITY:")
+    # CROSS-VALIDATION (Change #5): Validate financial quality
+    print(f"\n✓ Running cross-validation checks (financial quality)...")
+    for item in shortlist:
+        try:
+            ticker = item["ticker"]
+            validation = validate_stock(ticker)
+            item["validation_score"] = validation.get("validation_score", 0)
+            item["validation_pass"] = validation.get("is_valid", False)
+            item["validation_issues"] = validation.get("issues", [])
+
+            if validation.get("is_valid"):
+                item["validation_status"] = "✅ PASS"
+            else:
+                item["validation_status"] = "⚠️ CAUTION"
+        except Exception as e:
+            item["validation_status"] = "❓ ERROR"
+            item["validation_score"] = 0
+            item["validation_pass"] = False
+            continue
+
+    print(f"\nSHORTLIST WITH ACTION LABELS, RECOVERY & VALIDATION:")
     for r in shortlist:
         label = assign_action_label(r)
         recovery = r.get("recovery_probability_pct", 0)
         mc_signal = r.get("mc_signal", "")
-        print(f"  {label} — {r['ticker']} (${r['price']}) | Score: {r['score']} | Recovery: {recovery}% ({mc_signal})")
+        validation_status = r.get("validation_status", "❓")
+        validation_score = r.get("validation_score", 0)
+        print(f"  {label} — {r['ticker']} (${r['price']}) | Score: {r['score']} | Recovery: {recovery}% | Validation: {validation_status} ({validation_score}/100)")
 
     print(f"\nTOP BUY SIGNALS (WITH MONTE CARLO BOOST):")
     for r in buy[:5]:
