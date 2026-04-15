@@ -353,30 +353,14 @@ def run_full_analysis(mode="Manual", market_is_open=True):
     st.session_state.analysis_running = True
     st.session_state.analysis_start_time = datetime.now(timezone.utc)
     try:
+        # Stage 1: Screening
         with st.spinner("Stage 1 — Screening assets..."):
             shortlist, market_regime = run_screen()
 
         tickers = [r["ticker"] for r in shortlist]
 
-        if not tickers:
-            st.warning("No assets matched the screening criteria.")
-            return
-
-        buy_signals = [r for r in shortlist if r["signal"] == "BUY"]
-        avoid_signals = [r for r in shortlist if r["signal"] == "AVOID"]
-        watch_signals = [r for r in shortlist if r["signal"] == "WATCH"]
-
-        col1, col2, col3 = st.columns(3)
-        col1.metric("🟢 Buy", len(buy_signals))
-        col2.metric("🔴 Avoid", len(avoid_signals))
-        col3.metric("⚪ Watch", len(watch_signals))
-
-        st.subheader("Shortlisted Assets")
-        for r in shortlist:
-            action_label = r.get("action_label", "⚪ NEUTRAL")
-            st.write(f"{action_label} — **{r['ticker']}** — ${r['price']} — Score: {r['score']}")
-
-        with st.spinner("Fetching market context..."):
+        # Stage 2: Market Context (always show, regardless of screener results)
+        with st.spinner("Stage 2 — Fetching market context..."):
             market_context = get_market_context()
 
         spy = market_context.get("SPY")
@@ -390,55 +374,74 @@ def run_full_analysis(mode="Manual", market_is_open=True):
         if xle:
             col3.metric("Energy", f"${xle['price']}", f"{xle['change_percent']}%")
 
-        with st.spinner("Fetching live prices..."):
-            df = fetch_stock_data(tickers)
-        st.dataframe(df)
+        # Show screener results if any found
+        if tickers:
+            buy_signals = [r for r in shortlist if r["signal"] == "BUY"]
+            avoid_signals = [r for r in shortlist if r["signal"] == "AVOID"]
+            watch_signals = [r for r in shortlist if r["signal"] == "WATCH"]
 
-        with st.spinner("Fetching technical indicators..."):
-            historical = fetch_historical_data(tickers)
+            col1, col2, col3 = st.columns(3)
+            col1.metric("🟢 Buy", len(buy_signals))
+            col2.metric("🔴 Avoid", len(avoid_signals))
+            col3.metric("⚪ Watch", len(watch_signals))
 
-        with st.spinner("Checking earnings..."):
-            earnings = get_earnings_calendar(tickers)
-        earnings_summary = get_earnings_summary(earnings)
-        if "No earnings" not in earnings_summary:
-            st.warning(earnings_summary)
+            st.subheader("Shortlisted Assets")
+            for r in shortlist:
+                action_label = r.get("action_label", "⚪ NEUTRAL")
+                st.write(f"{action_label} — **{r['ticker']}** — ${r['price']} — Score: {r['score']}")
 
-        with st.spinner("Fetching options flow..."):
-            options_summary = get_options_summary(tickers)
+            with st.spinner("Fetching live prices..."):
+                df = fetch_stock_data(tickers)
+            st.dataframe(df)
 
-        with st.spinner("Checking insider activity..."):
-            insider_summary = get_insider_summary(tickers)
+            with st.spinner("Fetching technical indicators..."):
+                historical = fetch_historical_data(tickers)
 
-        with st.spinner("Fetching news..."):
-            if get_enhanced_news_setting():
-                from news_enhanced import fetch_stock_news_enhanced
-                news = fetch_stock_news_enhanced(tickers)
-                st.sidebar.caption("Enhanced news active")
-            else:
-                news = fetch_stock_news(tickers)
+            with st.spinner("Checking earnings..."):
+                earnings = get_earnings_calendar(tickers)
+            earnings_summary = get_earnings_summary(earnings)
+            if "No earnings" not in earnings_summary:
+                st.warning(earnings_summary)
 
-        if not market_is_open:
-            st.info("Markets are currently closed — analysis running but no new positions will be opened.")
+            with st.spinner("Fetching options flow..."):
+                options_summary = get_options_summary(tickers)
 
-        # Display News Intelligence (7 NLP features)
-        st.divider()
-        display_news_intelligence(news)
-        st.divider()
+            with st.spinner("Checking insider activity..."):
+                insider_summary = get_insider_summary(tickers)
 
-        with st.spinner(f"Claude analysing — {mode} mode..."):
-            analysis = analyse_stocks(
-                df, news, historical, earnings,
-                market_context, insider_summary, options_summary,
-                market_is_open=market_is_open,
-            )
+            with st.spinner("Fetching news..."):
+                if get_enhanced_news_setting():
+                    from news_enhanced import fetch_stock_news_enhanced
+                    news = fetch_stock_news_enhanced(tickers)
+                    st.sidebar.caption("Enhanced news active")
+                else:
+                    news = fetch_stock_news(tickers)
 
-        st.subheader("Claude's Analysis")
-        st.write(analysis)
+            if not market_is_open:
+                st.info("Markets are currently closed — analysis running but no new positions will be opened.")
 
-        log_file = save_daily_log(analysis, mode=mode, tickers=tickers)
-        st.success(f"Saved to {log_file}")
+            # Display News Intelligence (7 NLP features)
+            st.divider()
+            display_news_intelligence(news)
+            st.divider()
 
-        return analysis, tickers
+            with st.spinner(f"Claude analysing — {mode} mode..."):
+                analysis = analyse_stocks(
+                    df, news, historical, earnings,
+                    market_context, insider_summary, options_summary,
+                    market_is_open=market_is_open,
+                )
+
+            st.subheader("Claude's Analysis")
+            st.write(analysis)
+
+            log_file = save_daily_log(analysis, mode=mode, tickers=tickers)
+            st.success(f"Saved to {log_file}")
+
+            return analysis, tickers
+        else:
+            st.warning("⚠️ No new assets matched the screening criteria.")
+            st.info("Showing market analysis and current positions for context...")
     finally:
         st.session_state.analysis_running = False
 
