@@ -675,16 +675,16 @@ def screen_ticker(ticker, market_regime="BULL", sector_strategy=None):
         # Adjust thresholds based on market regime
         if market_regime == "BULL":
             # Bull markets: lower thresholds (favor growth/momentum)
-            buy_threshold = 9  # Lower than default 10
-            strong_signal_count = 2
+            buy_threshold = 8
+            strong_signal_count = 1
         elif market_regime == "BEAR":
             # Bear markets: higher thresholds (favor defensive/high conviction)
-            buy_threshold = 12  # Higher than default 10
-            strong_signal_count = 2
+            buy_threshold = 10
+            strong_signal_count = 1
         else:  # RANGING
             # Ranging markets: standard thresholds
-            buy_threshold = 10
-            strong_signal_count = 2
+            buy_threshold = 9
+            strong_signal_count = 1
 
         # BUY Signal Logic
         if score >= buy_threshold and strong_bullish >= strong_signal_count:
