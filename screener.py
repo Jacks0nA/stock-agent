@@ -6,6 +6,7 @@ import json
 import os
 from monte_carlo import get_monte_carlo_analysis
 from monte_carlo_learning import learning_system, print_learning_report
+from debate_framework import debate_stock, format_debate_summary
 
 # Cache file for screening results (expires after 1 hour)
 CACHE_FILE = "/tmp/screener_cache.json"
@@ -822,6 +823,51 @@ def run_screen(tickers=None, use_cache=True):
     for r in buy[:5]:
         recovery = r.get("recovery_probability_pct", 0)
         print(f"  {r['ticker']} — Score: {r['score']} — Recovery Prob: {recovery}% — {', '.join(r['reasons'])}")
+
+    # DEBATE FRAMEWORK (Change #1): High-confidence BUY signals get debated
+    print(f"\n🎤 DEBATE FRAMEWORK: Running debates on top 3 BUY signals...")
+    print(f"    (Bull vs Bear agents providing perspectives)\n")
+
+    for i, buy_signal in enumerate(buy[:3]):
+        try:
+            ticker = buy_signal["ticker"]
+            price = buy_signal.get("price", 0)
+            technical_signal = buy_signal.get("signal", "BUY")
+            news_sentiment = buy_signal.get("news_sentiment", "Neutral")
+            recovery_prob = buy_signal.get("recovery_probability", 0.5)
+            moat_score = buy_signal.get("moat_score", 2.5)
+            volatility = buy_signal.get("volatility", 0.25)
+            insider_activity = buy_signal.get("insider_activity", "None")
+
+            # Run debate
+            debate_result = debate_stock(
+                ticker, price, technical_signal, news_sentiment,
+                recovery_prob, moat_score, volatility, insider_activity
+            )
+
+            # Add debate result to shortlist item
+            buy_signal["debate_synthesis"] = debate_result.get("synthesis", "")
+            buy_signal["debate_complete"] = True
+
+            # Extract confidence from debate
+            synthesis = debate_result.get("synthesis", "")
+            if "Confidence: 9" in synthesis or "Confidence: 10" in synthesis:
+                buy_signal["debate_confidence"] = "VERY_HIGH"
+                print(f"  ✅ {ticker}: DEBATE CONFIDENCE = VERY HIGH")
+            elif "Confidence: 7" in synthesis or "Confidence: 8" in synthesis:
+                buy_signal["debate_confidence"] = "HIGH"
+                print(f"  ✅ {ticker}: DEBATE CONFIDENCE = HIGH")
+            elif "Confidence: 5" in synthesis or "Confidence: 6" in synthesis:
+                buy_signal["debate_confidence"] = "MEDIUM"
+                print(f"  ⚠️ {ticker}: DEBATE CONFIDENCE = MEDIUM (proceed with caution)")
+            else:
+                buy_signal["debate_confidence"] = "LOW"
+                print(f"  ❌ {ticker}: DEBATE CONFIDENCE = LOW (debate suggests caution)")
+
+        except Exception as e:
+            print(f"  ⚠️ Debate error for {buy_signal.get('ticker', 'UNKNOWN')}: {str(e)[:50]}")
+            buy_signal["debate_complete"] = False
+            continue
 
     # Save to cache if full screen
     if is_full_screen:
