@@ -4,6 +4,7 @@ from fetcher import calculate_rsi
 from datetime import datetime, timedelta
 import json
 import os
+from monte_carlo import get_monte_carlo_analysis
 
 # Cache file for screening results (expires after 1 hour)
 CACHE_FILE = "/tmp/screener_cache.json"
@@ -777,14 +778,49 @@ def run_screen(tickers=None, use_cache=True):
     print(f"WATCH signals: {len(watch)}")
     print(f"Shortlist for Claude: {len(shortlist)}")
 
-    print(f"\nSHORTLIST WITH ACTION LABELS:")
+    # ADD MONTE CARLO RECOVERY PROBABILITY (Change #9)
+    print(f"\nRunning Monte Carlo analysis (10K simulations per stock)...")
+    tickers_for_mc = [r["ticker"] for r in shortlist]
+    mc_results = get_monte_carlo_analysis(tickers_for_mc)
+
+    # Add recovery probability to shortlist
+    for item in shortlist:
+        ticker = item["ticker"]
+        if ticker in mc_results:
+            mc_data = mc_results[ticker]
+            item["recovery_probability"] = mc_data.get("recovery_probability", 0)
+            item["recovery_probability_pct"] = mc_data.get("recovery_probability_pct", 0)
+            item["median_return_1yr"] = mc_data.get("percentile_50", 0)
+            item["downside_risk"] = mc_data.get("downside_risk", 0)
+            item["upside_potential"] = mc_data.get("upside_potential", 0)
+
+            # Boost score if recovery probability is high (indicates quality trade)
+            if item["recovery_probability"] > 0.70:
+                item["score"] += 5  # Boost high-recovery trades
+                item["mc_signal"] = "STRONG RECOVERY"
+            elif item["recovery_probability"] > 0.50:
+                item["score"] += 2
+                item["mc_signal"] = "MODERATE RECOVERY"
+            else:
+                item["mc_signal"] = "WEAK RECOVERY"
+        else:
+            item["recovery_probability_pct"] = 0
+            item["mc_signal"] = "NOT ANALYZED"
+
+    # Re-sort by updated score (now includes Monte Carlo boost)
+    shortlist.sort(key=lambda x: x["score"], reverse=True)
+
+    print(f"\nSHORTLIST WITH ACTION LABELS & RECOVERY PROBABILITY:")
     for r in shortlist:
         label = assign_action_label(r)
-        print(f"  {label} — {r['ticker']} (${r['price']}) | Score: {r['score']}")
+        recovery = r.get("recovery_probability_pct", 0)
+        mc_signal = r.get("mc_signal", "")
+        print(f"  {label} — {r['ticker']} (${r['price']}) | Score: {r['score']} | Recovery: {recovery}% ({mc_signal})")
 
-    print(f"\nTOP BUY SIGNALS:")
+    print(f"\nTOP BUY SIGNALS (WITH MONTE CARLO BOOST):")
     for r in buy[:5]:
-        print(f"  {r['ticker']} — Score: {r['score']} — {', '.join(r['reasons'])}")
+        recovery = r.get("recovery_probability_pct", 0)
+        print(f"  {r['ticker']} — Score: {r['score']} — Recovery Prob: {recovery}% — {', '.join(r['reasons'])}")
 
     # Save to cache if full screen
     if is_full_screen:
