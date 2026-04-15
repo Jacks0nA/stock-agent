@@ -566,14 +566,23 @@ with tab2:
         current_prices = get_current_prices(tickers)
         for p in open_positions:
             ticker = p["ticker"]
-            current = current_prices.get(ticker, float(p["entry_price"]))
-            entry = float(p["entry_price"])
-            target = float(p["target_price"])
-            stop = float(p["stop_loss"])
-            size = float(p["position_size"])
-            unrealised_pct = round(((current - entry) / entry) * 100, 2) if entry > 0 else 0.0
-            unrealised_gbp = round(size * (unrealised_pct / 100), 2) if entry > 0 else 0.0
-            colour = "🟢" if unrealised_pct >= 0 else "🔴"
+            try:
+                entry = float(p["entry_price"]) if p.get("entry_price") else 0
+                target = float(p["target_price"]) if p.get("target_price") else 0
+                stop = float(p["stop_loss"]) if p.get("stop_loss") else 0
+                size = float(p["position_size"]) if p.get("position_size") else 0
+                current = current_prices.get(ticker, entry) if entry > 0 else entry
+
+                if entry > 0:
+                    unrealised_pct = round(((current - entry) / entry) * 100, 2)
+                    unrealised_gbp = round(size * (unrealised_pct / 100), 2)
+                else:
+                    unrealised_pct = 0.0
+                    unrealised_gbp = 0.0
+                colour = "🟢" if unrealised_pct >= 0 else "🔴"
+            except Exception as e:
+                st.error(f"Error calculating P&L for {ticker}: {str(e)[:50]}")
+                continue
 
             with st.expander(f"{colour} {ticker} — {unrealised_pct}% (£{unrealised_gbp}) — {p['confidence']}"):
                 # Show pyramid layers if they exist
