@@ -14,7 +14,7 @@ except (AttributeError, OSError):
     # tzset() not available on all systems (e.g., Windows), but that's fine
     pass
 from fetcher import fetch_stock_data, fetch_historical_data, fetch_fundamentals
-from news import fetch_stock_news
+from news_enhanced import fetch_stock_news
 from options import get_options_summary
 from insider import get_insider_summary
 from earnings import get_earnings_calendar, get_earnings_summary

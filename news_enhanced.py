@@ -30,6 +30,125 @@ def get_sentiment(text):
     else:
         return "Neutral", round(score, 2)
 
+def get_credibility_rating(source):
+    """
+    Returns credibility score A-E based on news source.
+    A = highest credibility (Reuters, Bloomberg, AP)
+    E = lowest credibility (Twitter, blogs)
+    """
+    source_lower = source.lower() if source else ""
+
+    if any(x in source_lower for x in ["reuters", "bloomberg", "ap news", "ft.com", "wsj"]):
+        return "A", 1.0
+    elif any(x in source_lower for x in ["cnbc", "cnn", "bbc", "marketwatch", "yahoo finance"]):
+        return "B", 0.85
+    elif any(x in source_lower for x in ["seeking alpha", "motley fool", "benzinga", "newsapi"]):
+        return "C", 0.70
+    elif any(x in source_lower for x in ["reddit", "twitter", "stocktwits", "seeking alpha comments"]):
+        return "D", 0.50
+    else:
+        return "C", 0.70
+
+def get_price_impact_potential(title, summary):
+    """
+    Estimates potential stock price impact based on content.
+    Keywords that historically cause big moves get higher scores.
+    """
+    text = (title + " " + summary).lower()
+
+    high_impact_keywords = [
+        "earnings beat", "earnings miss", "revenue", "guidance", "acquisition",
+        "bankruptcy", "sec investigation", "fda approval", "lawsuit", "ceo resignation",
+        "split", "dividend", "ipo", "delisting", "recall", "product launch"
+    ]
+
+    medium_impact_keywords = [
+        "analyst upgrade", "analyst downgrade", "price target", "insider buying",
+        "insider selling", "partnership", "expansion", "restructuring"
+    ]
+
+    low_impact_keywords = [
+        "conference", "event", "meeting", "announcement", "statement"
+    ]
+
+    impact_score = 0.0
+
+    for keyword in high_impact_keywords:
+        if keyword in text:
+            impact_score = max(impact_score, 0.8)
+
+    for keyword in medium_impact_keywords:
+        if keyword in text:
+            impact_score = max(impact_score, 0.5)
+
+    for keyword in low_impact_keywords:
+        if keyword in text:
+            impact_score = max(impact_score, 0.2)
+
+    return round(impact_score, 2)
+
+def get_insider_activity(text):
+    """
+    Detects if article mentions insider buying/selling.
+    Returns: "BUY" (insiders buying), "SELL" (insiders selling), or None
+    """
+    text_lower = text.lower()
+
+    buy_signals = ["insider buying", "insider bought", "insider purchases", "director bought", "officer bought"]
+    sell_signals = ["insider selling", "insider sold", "insider sells", "director sold", "officer sold", "insider dump"]
+
+    if any(signal in text_lower for signal in buy_signals):
+        return "BUY"
+    elif any(signal in text_lower for signal in sell_signals):
+        return "SELL"
+    return None
+
+def get_risk_assessment(title, summary):
+    """
+    Determines if risk is company-specific or market-wide.
+    Returns: "COMPANY_SPECIFIC" or "MARKET_WIDE"
+    """
+    text = (title + " " + summary).lower()
+
+    market_wide_keywords = [
+        "fed", "federal reserve", "interest rates", "inflation", "recession",
+        "market crash", "stock market", "economic", "gdp", "unemployment",
+        "central bank", "crypto", "sector", "industry", "trade war"
+    ]
+
+    company_specific_keywords = [
+        "profit", "loss", "earnings", "revenue", "product", "service",
+        "ceo", "executive", "management", "lawsuit", "investigation",
+        "recall", "competition", "customer"
+    ]
+
+    market_count = sum(1 for kw in market_wide_keywords if kw in text)
+    company_count = sum(1 for kw in company_specific_keywords if kw in text)
+
+    if market_count > company_count:
+        return "MARKET_WIDE"
+    else:
+        return "COMPANY_SPECIFIC"
+
+def get_surprise_factor(title):
+    """
+    Detects if news is surprising/unexpected.
+    Unexpected news (rare keywords) = higher surprise score.
+    """
+    text_lower = title.lower()
+
+    surprising_keywords = [
+        "unexpected", "surprise", "shock", "shocking", "sudden",
+        "unprecedented", "first", "rare", "never", "breakthrough",
+        "breakthrough", "record", "crash", "plunge", "surge", "soar"
+    ]
+
+    surprise_score = 0.0
+    if any(kw in text_lower for kw in surprising_keywords):
+        surprise_score = 0.7
+
+    return round(surprise_score, 2)
+
 def get_article_age_hours(published_str):
     """
     Returns how many hours ago an article was published.
@@ -254,13 +373,40 @@ def fetch_stock_news_enhanced(tickers):
             for article in all_articles[:8]:
                 title = article["title"]
                 summary = article.get("summary", "")
+                source = article.get("source", "Unknown")
                 age_hours = article.get("age_hours", 999)
                 recency_weight = get_recency_weight(age_hours)
 
-                # Score on title + summary combined
+                # FEATURE 1: Sentiment
                 combined_text = title + " " + summary
                 sentiment_label, raw_score = get_sentiment(combined_text)
-                weighted_score = raw_score * recency_weight
+
+                # FEATURE 2: Price Impact Potential (0-1 scale, how much will this move the stock?)
+                price_impact = get_price_impact_potential(title, summary)
+
+                # FEATURE 3: Credibility Rating (A-E scale)
+                credibility_grade, credibility_multiplier = get_credibility_rating(source)
+
+                # FEATURE 4: Insider Activity (BUY/SELL/None)
+                insider_activity = get_insider_activity(combined_text)
+
+                # FEATURE 5: Risk Assessment (Company-specific vs Market-wide)
+                risk_type = get_risk_assessment(title, summary)
+
+                # FEATURE 6: Surprise Factor (0-1, how unexpected is this news?)
+                surprise = get_surprise_factor(title)
+
+                # FEATURE 7: Momentum (news recency affects momentum)
+                # Recent news = accelerating momentum
+                if age_hours < 6:
+                    momentum = "ACCELERATING"
+                elif age_hours < 24:
+                    momentum = "ACTIVE"
+                else:
+                    momentum = "FADING"
+
+                # Calculate composite weighted score
+                weighted_score = (raw_score * recency_weight * credibility_multiplier) + (price_impact * 0.2)
 
                 # Format age display
                 if age_hours < 1:
@@ -271,14 +417,29 @@ def fetch_stock_news_enhanced(tickers):
                     age_str = f"{int(age_hours / 24)}d ago"
 
                 scored_headlines.append({
+                    # Basic
                     "title": title,
                     "summary": summary,
+                    "source": source,
+                    "age_str": age_str,
+                    # Feature 1: Sentiment
                     "sentiment": sentiment_label,
                     "score": round(raw_score, 2),
+                    # Feature 2: Price Impact
+                    "price_impact": price_impact,
+                    # Feature 3: Credibility
+                    "credibility": credibility_grade,
+                    # Feature 4: Insider Activity
+                    "insider_activity": insider_activity,
+                    # Feature 5: Risk Type
+                    "risk_type": risk_type,
+                    # Feature 6: Surprise
+                    "surprise_factor": surprise,
+                    # Feature 7: Momentum
+                    "momentum": momentum,
+                    # Composite Score
                     "weighted_score": round(weighted_score, 2),
-                    "age_hours": age_hours,
-                    "age_str": age_str,
-                    "source": article.get("source", "Unknown")
+                    "age_hours": age_hours
                 })
                 weighted_scores.append(weighted_score)
 
@@ -312,3 +473,12 @@ def fetch_stock_news_enhanced(tickers):
             }
 
     return all_news
+
+
+# Backward compatibility: alias for code that imports from news.py
+def fetch_stock_news(tickers):
+    """
+    Backward-compatible wrapper. Same as fetch_stock_news_enhanced.
+    All code that used to call news.fetch_stock_news() will work unchanged.
+    """
+    return fetch_stock_news_enhanced(tickers)

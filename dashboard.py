@@ -28,7 +28,7 @@ except ImportError:
 
 from fetcher import fetch_stock_data, fetch_historical_data
 from agent import analyse_stocks
-from news import fetch_stock_news
+from news_enhanced import fetch_stock_news
 from earnings import get_earnings_calendar, get_earnings_summary
 from sectors import get_market_context, get_market_summary
 from screener import run_screen
@@ -280,6 +280,10 @@ def run_full_analysis(mode="Manual", market_is_open=True):
             shortlist, market_regime = run_screen()
 
         tickers = [r["ticker"] for r in shortlist]
+
+        if not tickers:
+            st.warning("No assets matched the screening criteria.")
+            return
 
         buy_signals = [r for r in shortlist if r["signal"] == "BUY"]
         avoid_signals = [r for r in shortlist if r["signal"] == "AVOID"]
