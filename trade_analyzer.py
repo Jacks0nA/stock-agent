@@ -22,6 +22,17 @@ def analyze_closed_positions(closed_positions, historical_data=None):
     if not closed_positions:
         return {}
 
+    # Helper to get or calculate pnl_pct
+    def get_pnl_pct(p):
+        if "pnl_pct" in p:
+            return float(p["pnl_pct"])
+        # Calculate from pnl and position_size if missing
+        pnl = float(p.get("pnl", 0))
+        size = float(p.get("position_size", 1))
+        if size > 0:
+            return round((pnl / size) * 100, 2)
+        return 0.0
+
     # Separate winners and losers
     winners = [p for p in closed_positions if p.get("pnl") and float(p.get("pnl", 0)) > 0]
     losers = [p for p in closed_positions if p.get("pnl") and float(p.get("pnl", 0)) < 0]
@@ -31,8 +42,8 @@ def analyze_closed_positions(closed_positions, historical_data=None):
         "winning_trades": len(winners),
         "losing_trades": len(losers),
         "win_rate": round(len(winners) / len(closed_positions) * 100, 1) if closed_positions else 0,
-        "avg_winner_pct": round(statistics.mean([float(p["pnl_pct"]) for p in winners]), 2) if winners else 0,
-        "avg_loser_pct": round(statistics.mean([float(p["pnl_pct"]) for p in losers]), 2) if losers else 0,
+        "avg_winner_pct": round(statistics.mean([get_pnl_pct(p) for p in winners]), 2) if winners else 0,
+        "avg_loser_pct": round(statistics.mean([get_pnl_pct(p) for p in losers]), 2) if losers else 0,
         "largest_win": max([float(p["pnl"]) for p in winners], default=0),
         "largest_loss": min([float(p["pnl"]) for p in losers], default=0),
     }
