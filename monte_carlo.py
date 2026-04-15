@@ -6,6 +6,11 @@ Runs 10K simulations for each stock to:
 2. Generate return distribution (best case, worst case, median)
 3. Calculate confidence intervals (25th, 50th, 75th percentile)
 4. Identify highest-probability trades
+
+LEARNING SYSTEM:
+- Tracks predictions vs actual results
+- Adjusts volatility multiplier based on accuracy
+- Gets smarter each day (auto-improves)
 """
 
 import numpy as np
@@ -13,6 +18,7 @@ import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
 import warnings
+from monte_carlo_learning import learning_system
 
 warnings.filterwarnings('ignore')
 
@@ -96,6 +102,10 @@ class MonteCarloSimulator:
         current_price = stats["current_price"]
         volatility = stats["volatility"]
         drift = stats["drift"]
+
+        # LEARNING SYSTEM: Adjust volatility based on past prediction accuracy
+        volatility_multiplier = learning_system.volatility_multiplier
+        volatility = volatility * volatility_multiplier
 
         # Handle edge cases
         if volatility == 0 or np.isnan(volatility):
@@ -233,6 +243,11 @@ class MonteCarloSimulator:
                 analysis = self.analyze_stock(ticker)
                 if analysis:
                     results[ticker] = analysis
+
+                    # LEARNING SYSTEM: Log this prediction for later accuracy tracking
+                    recovery_prob = analysis.get("recovery_probability", 0)
+                    learning_system.record_prediction(ticker, recovery_prob)
+
             except Exception as e:
                 continue
 

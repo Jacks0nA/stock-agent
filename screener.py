@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import json
 import os
 from monte_carlo import get_monte_carlo_analysis
+from monte_carlo_learning import learning_system, print_learning_report
 
 # Cache file for screening results (expires after 1 hour)
 CACHE_FILE = "/tmp/screener_cache.json"
@@ -825,6 +826,15 @@ def run_screen(tickers=None, use_cache=True):
     # Save to cache if full screen
     if is_full_screen:
         save_cache(shortlist, regime)
+
+    # Display Monte Carlo Learning Report (Change #15: Self-Learning System)
+    print_learning_report()
+    monthly_summary = learning_system.get_monthly_summary()
+    if monthly_summary.get("completed", 0) > 0:
+        print(f"\n📈 LAST 30 DAYS ACCURACY: {monthly_summary['accuracy']*100:.1f}%")
+        print(f"   ({monthly_summary['completed']} trades completed)")
+        if monthly_summary.get("improvement"):
+            print(f"   Improvement vs baseline: +{monthly_summary['improvement']:.1f}%")
 
     return shortlist, regime
 
