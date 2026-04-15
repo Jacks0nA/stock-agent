@@ -112,10 +112,13 @@ class MonteCarloLearning:
             return {
                 "total_predictions": 0,
                 "completed_predictions": 0,
-                "overall_accuracy": 0,
+                "overall_accuracy": None,
                 "high_confidence_accuracy": None,
+                "high_confidence_count": 0,
                 "medium_confidence_accuracy": None,
-                "low_confidence_accuracy": None
+                "medium_confidence_count": 0,
+                "low_confidence_accuracy": None,
+                "low_confidence_count": 0
             }
 
         # Split by confidence level
