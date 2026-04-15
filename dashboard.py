@@ -442,6 +442,33 @@ def run_full_analysis(mode="Manual", market_is_open=True):
         else:
             st.warning("⚠️ No new assets matched the screening criteria.")
             st.info("Showing market analysis and current positions for context...")
+
+            # Show market regime analysis
+            st.divider()
+            st.subheader("📊 Market Analysis")
+            st.write(f"**Current Regime:** {market_regime}")
+
+            # Show portfolio positions if any exist
+            try:
+                with open("/tmp/portfolio.json", "r") as f:
+                    portfolio = json.load(f)
+                    if portfolio and "positions" in portfolio:
+                        positions = portfolio["positions"]
+                        if positions:
+                            st.subheader("📈 Current Positions")
+                            st.write(f"Active positions: {len(positions)}")
+                            for p in positions[:5]:  # Show first 5
+                                ticker = p.get("ticker", "N/A")
+                                entry = p.get("entry_price", 0)
+                                if entry and entry > 0:
+                                    st.write(f"• {ticker} — Entry: ${entry:.2f}")
+                        else:
+                            st.info("No active positions.")
+            except Exception:
+                st.info("No portfolio data available yet.")
+
+            st.divider()
+            st.info("💡 Continue monitoring. New opportunities will appear when market conditions align with your screening criteria.")
     finally:
         st.session_state.analysis_running = False
 
