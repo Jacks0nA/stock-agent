@@ -126,6 +126,79 @@ def save_schedule_state(state):
             })
     except Exception as e:
         print(f"Schedule state save error: {e}")
+def display_news_intelligence(news_data):
+    """
+    Displays all 7 NLP features for each article in a beautiful format.
+    news_data: Dict from fetch_stock_news_enhanced()
+    """
+    for ticker, ticker_news in news_data.items():
+        st.subheader(f"📰 {ticker} — News Intelligence")
+
+        overall_sentiment = ticker_news.get("overall_sentiment", "Neutral")
+        avg_score = ticker_news.get("avg_score", 0)
+        has_signal = ticker_news.get("has_signal", False)
+
+        # Summary bar
+        sentiment_emoji = "🟢" if overall_sentiment == "Positive" else "🔴" if overall_sentiment == "Negative" else "⚪"
+        signal_emoji = "⚡" if has_signal else "✓"
+        st.write(f"{sentiment_emoji} **{overall_sentiment}** | Avg Score: {avg_score:+.2f} | Signal: {signal_emoji}")
+
+        # Display each headline with all 7 features
+        headlines = ticker_news.get("headlines", [])
+        if headlines:
+            for i, headline in enumerate(headlines[:5]):  # Show top 5
+                with st.expander(f"📄 {headline.get('title', 'No title')[:70]}...", expanded=(i == 0)):
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        st.write("**Feature 1: Sentiment**")
+                        sentiment = headline.get("sentiment", "Neutral")
+                        st.write(f"→ {sentiment} ({headline.get('score', 0):+.2f})")
+
+                        st.write("**Feature 2: Price Impact**")
+                        impact = headline.get("price_impact", 0)
+                        impact_label = "🔥 High" if impact > 0.7 else "📈 Moderate" if impact > 0.3 else "📊 Low"
+                        st.write(f"→ {impact_label} ({impact:.2f})")
+
+                        st.write("**Feature 3: Credibility**")
+                        cred = headline.get("credibility", "C")
+                        st.write(f"→ Grade {cred}")
+
+                        st.write("**Feature 4: Insider Activity**")
+                        insider = headline.get("insider_activity", None)
+                        if insider:
+                            emoji = "🚀" if insider == "BUY" else "⚠️"
+                            st.write(f"→ {emoji} {insider}")
+                        else:
+                            st.write("→ None detected")
+
+                    with col2:
+                        st.write("**Feature 5: Risk Type**")
+                        risk = headline.get("risk_type", "COMPANY_SPECIFIC")
+                        st.write(f"→ {risk}")
+
+                        st.write("**Feature 6: Surprise Factor**")
+                        surprise = headline.get("surprise_factor", 0)
+                        surprise_label = "🤯 High" if surprise > 0.5 else "✓ Low"
+                        st.write(f"→ {surprise_label} ({surprise:.2f})")
+
+                        st.write("**Feature 7: Momentum**")
+                        momentum = headline.get("momentum", "FADING")
+                        momentum_emoji = "📈" if momentum == "ACCELERATING" else "➡️" if momentum == "ACTIVE" else "📉"
+                        st.write(f"→ {momentum_emoji} {momentum}")
+
+                        st.write("**Composite Score**")
+                        composite = headline.get("weighted_score", 0)
+                        st.write(f"→ {composite:+.2f}")
+
+                    st.divider()
+                    st.caption(f"📅 {headline.get('age_str', 'unknown')} | 🏢 {headline.get('source', 'Unknown')}")
+                    if headline.get("summary"):
+                        st.caption(f"📝 {headline.get('summary', '')[:200]}...")
+
+        st.divider()
+
+
 def get_enhanced_news_setting():
     try:
         url = f"{get_base_url()}/rest/v1/portfolio_state?key=eq.enhanced_news"
@@ -342,6 +415,11 @@ def run_full_analysis(mode="Manual", market_is_open=True):
 
         if not market_is_open:
             st.info("Markets are currently closed — analysis running but no new positions will be opened.")
+
+        # Display News Intelligence (7 NLP features)
+        st.divider()
+        display_news_intelligence(news)
+        st.divider()
 
         with st.spinner(f"Claude analysing — {mode} mode..."):
             analysis = analyse_stocks(
