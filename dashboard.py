@@ -568,8 +568,8 @@ with tab2:
             target = float(p["target_price"])
             stop = float(p["stop_loss"])
             size = float(p["position_size"])
-            unrealised_pct = round(((current - entry) / entry) * 100, 2)
-            unrealised_gbp = round(size * (unrealised_pct / 100), 2)
+            unrealised_pct = round(((current - entry) / entry) * 100, 2) if entry > 0 else 0.0
+            unrealised_gbp = round(size * (unrealised_pct / 100), 2) if entry > 0 else 0.0
             colour = "🟢" if unrealised_pct >= 0 else "🔴"
 
             with st.expander(f"{colour} {ticker} — {unrealised_pct}% (£{unrealised_gbp}) — {p['confidence']}"):
